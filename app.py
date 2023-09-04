@@ -6,6 +6,7 @@ from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.middleware.shared_data import SharedDataMiddleware
 
 from controllers.user import app as user_controller
+from controllers.product import app as product_controller
 from models import *
 from config import *
 
@@ -27,7 +28,8 @@ db.init_app(app)
 migrate = Migrate(app, db, compare_type=True)
 
 app.wsgi_app = DispatcherMiddleware(None, {
-	'/flask/user': user_controller
+	'/flask/user': user_controller,
+	'/flask/product': product_controller
 })
 
 app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {

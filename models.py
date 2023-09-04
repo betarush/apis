@@ -36,11 +36,11 @@ class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	name = db.Column(db.String(20))
 	image = db.Column(db.String(75))
-	desc = db.Column(db.String(100))
-	link = db.Column(db.String(20))
+	info = db.Column(db.String(100))
+	link = db.Column(db.String(50))
 
-	def __init__(self, name, image, desc, link):
+	def __init__(self, name, image, info, link):
 		self.name = name
 		self.image = image
-		self.desc = desc
+		self.info = info
 		self.link = link
