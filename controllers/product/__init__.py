@@ -35,3 +35,17 @@ def list_product():
 	query("insert into product (name, image, info, link) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "')")
 
 	return { "msg": "" }
+
+@app.route("/get_products", methods=["POST"])
+def get_products():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	datas = query("select * from product where not creatorId = " + userId, True).fetchall()
+
+	for data in datas:
+		data["key"] = "product-" + str(data["id"])
+		data["logo"] = json.loads(data["image"])
+
+	return { "products": datas }

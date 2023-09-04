@@ -38,9 +38,12 @@ class Product(db.Model):
 	image = db.Column(db.String(75))
 	info = db.Column(db.String(100))
 	link = db.Column(db.String(50))
+	creatorId = db.Column(db.Integer)
 
-	def __init__(self, name, image, info, link):
+	def __init__(self, name, image, info, link, creatorId):
 		self.name = name
 		self.image = image
 		self.info = info
 		self.link = link
+		self.creatorId = creatorId
+		
