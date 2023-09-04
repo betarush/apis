@@ -6,6 +6,7 @@ from models import *
 from functions import *
 from flask_mail import Mail, Message
 from binascii import a2b_base64
+from time import time
 import os, json
 
 cors = CORS(app)
@@ -31,11 +32,27 @@ def list_product():
 	fd.write(data)
 	fd.close()
 
-	image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
+	user = query("select tokens from user where id = " + userId, True).fetchone()
 
-	query("insert into product (name, image, info, link, creatorId) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ")")
+	if user != None:
+		image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
+		tokens = json.loads(user["tokens"])
 
-	return { "msg": "" }
+		amount = 10.00
+		transferGroup = getId()
+		charge = stripe.Charge.create(
+			amount=int(amount * 100),
+			currency="cad",
+			customer=tokens["creator"],
+			transfer_group=transferGroup
+		)
+		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
+
+		query("insert into product (name, image, info, link, creatorId, otherInfo) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "')")
+
+		return { "msg": "" }
+
+	return { "status": "nonExist" }, 400
 
 @app.route("/get_untested_products", methods=["POST"])
 def get_untested_products():
@@ -60,6 +77,9 @@ def get_untested_products():
 
 		data["trying"] = testing != None
 
+		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = ''", True).fetchone()["count(*)"]
+		data["numTried"] = 5 - testing
+
 	return { "products": datas }
 
 @app.route("/get_tested_products", methods=["POST"])
@@ -77,6 +97,10 @@ def get_tested_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
+		testing = query("select earned from product_testing where productId = " + str(data["id"]), True).fetchone()
+
+		data["earned"] = testing["earned"] == True
+
 	return { "products": datas }
 
 @app.route("/get_my_products", methods=["POST"])
@@ -92,6 +116,16 @@ def get_my_products():
 	for data in datas:
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
+
+		otherInfo = json.loads(data["otherInfo"])
+		charge = stripe.Charge.retrieve(otherInfo["charge"])
+		data["amountSpent"] = round(charge.amount / 100, 2)
+
+		productId = str(data["id"])
+
+		testing = query("select count(*) from product_testing where productId = " + productId + " and not feedback = ''", True).fetchone()["count(*)"]
+
+		data["numTried"] = testing
 
 	return { "products": datas }
 

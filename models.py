@@ -25,12 +25,18 @@ class User(db.Model):
 	password = db.Column(db.String(110), unique=True)
 	username = db.Column(db.String(25), unique=True)
 	earnings = db.Column(db.Float())
+	paymentInfo = db.Column(db.String(100))
+	bankaccountInfo = db.Column(db.String(200))
+	tokens = db.Column(db.String(75), unique=True)
 
-	def __init__(self, email, password, username, earnings):
+	def __init__(self, email, password, username, earnings, paymentInfo, bankaccountInfo, tokens):
 		self.email = email
 		self.password = password
 		self.username = username
 		self.earnings = earnings
+		self.paymentInfo = paymentInfo
+		self.bankaccountInfo = bankaccountInfo
+		self.tokens = tokens
 
 class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
@@ -39,21 +45,25 @@ class Product(db.Model):
 	info = db.Column(db.String(100))
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
+	otherInfo = db.Column(db.String(85), unique=True)
 
-	def __init__(self, name, image, info, link, creatorId):
+	def __init__(self, name, image, info, link, creatorId, otherInfo):
 		self.name = name
 		self.image = image
 		self.info = info
 		self.link = link
 		self.creatorId = creatorId
+		self.otherInfo = otherInfo
 
 class ProductTesting(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	testerId = db.Column(db.Integer)
 	productId = db.Column(db.Integer)
 	feedback = db.Column(db.String(100))
+	earned = db.Column(db.Boolean)
 
-	def __init__(self, testerId, productId, feedback):
+	def __init__(self, testerId, productId, feedback, earned):
 		self.testerId = testerId
 		self.productId = productId
 		self.feedback = feedback
+		self.earned = earned

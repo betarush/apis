@@ -2,6 +2,9 @@ import pymysql.cursors, os, json
 from random import randint
 from time import time
 from config import *
+import stripe
+
+stripe.api_key = "sk_test_51NmA1PFqjgkiO0WHxOmFjOzgwHorLyTxjyWJ926HiBK10KHnTnh7q8skEmQ5c0NpHxI3mk2fbejMASjazhPlmGkv00L98uIq8G"
 
 photoUrl = os.getenv("PHOTO_URL")
 
