@@ -18,6 +18,7 @@ def welcome_product():
 def list_product():
 	content = request.get_json()
 
+	userId = str(content['userId'])
 	name = content['name']
 	desc = content['desc']
 	link = content['link']
@@ -32,20 +33,80 @@ def list_product():
 
 	image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
 
-	query("insert into product (name, image, info, link) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "')")
+	query("insert into product (name, image, info, link, creatorId) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ")")
 
 	return { "msg": "" }
 
-@app.route("/get_products", methods=["POST"])
-def get_products():
+@app.route("/get_untested_products", methods=["POST"])
+def get_untested_products():
 	content = request.get_json()
 
 	userId = str(content['userId'])
 
-	datas = query("select * from product where not creatorId = " + userId, True).fetchall()
+	sql = "select * from product where not creatorId = " + userId
+	sql += " and ("
+	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and testerId = " + userId + " and feedback = '') > 0"
+	sql += ")"
+
+	datas = query(sql, True).fetchall()
+
+	for data in datas:
+		data["key"] = "product-" + str(data["id"])
+		data["logo"] = json.loads(data["image"])
+
+		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]), True).fetchone()
+
+		data["trying"] = testing != None
+
+	return { "products": datas }
+
+@app.route("/get_tested_products", methods=["POST"])
+def get_tested_products():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	sql = "select * from product where not creatorId = " + userId
+	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + " and not feedback = '') > 0"
+
+	datas = query(sql, True).fetchall()
 
 	for data in datas:
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
 	return { "products": datas }
+
+@app.route("/try_product", methods=["POST"])
+def try_product():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+	productId = str(content['productId'])
+
+	testing = True
+
+	testing = query("select * from product_testing where testerId = " + userId + " and productId = " + productId, True).fetchone()
+
+	if testing == None: # haven't tried yet
+		query("insert into product_testing (testerId, productId, feedback) values (" + userId + ", " + productId + ", '')")
+
+	return { "msg": "" }
+
+@app.route("/submit_feedback", methods=["POST"])
+def submit_feedback():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+	productId = str(content['productId'])
+	feedback = content['feedback']
+
+	testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + productId + " and feedback = ''", True).fetchone()
+
+	if testing != None:
+		query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
+
+		return { "msg": "" }
+
+	return { "status": "nonExist" }, 400
+

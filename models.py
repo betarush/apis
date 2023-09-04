@@ -46,4 +46,14 @@ class Product(db.Model):
 		self.info = info
 		self.link = link
 		self.creatorId = creatorId
-		
+
+class ProductTesting(db.Model):
+	id = db.Column(db.Integer, primary_key=True)
+	testerId = db.Column(db.Integer)
+	productId = db.Column(db.Integer)
+	feedback = db.Column(db.String(100))
+
+	def __init__(self, testerId, productId, feedback):
+		self.testerId = testerId
+		self.productId = productId
+		self.feedback = feedback
