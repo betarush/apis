@@ -46,6 +46,8 @@ def get_untested_products():
 	sql = "select * from product where not creatorId = " + userId
 	sql += " and ("
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and testerId = " + userId + " and feedback = '') > 0"
+	sql += " or "
+	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
 	sql += ")"
 
 	datas = query(sql, True).fetchall()
@@ -77,6 +79,22 @@ def get_tested_products():
 
 	return { "products": datas }
 
+@app.route("/get_my_products", methods=["POST"])
+def get_my_products():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	sql = "select * from product where creatorId = " + userId
+
+	datas = query(sql, True).fetchall()
+
+	for data in datas:
+		data["key"] = "product-" + str(data["id"])
+		data["logo"] = json.loads(data["image"])
+
+	return { "products": datas }
+
 @app.route("/try_product", methods=["POST"])
 def try_product():
 	content = request.get_json()
@@ -92,21 +110,4 @@ def try_product():
 		query("insert into product_testing (testerId, productId, feedback) values (" + userId + ", " + productId + ", '')")
 
 	return { "msg": "" }
-
-@app.route("/submit_feedback", methods=["POST"])
-def submit_feedback():
-	content = request.get_json()
-
-	userId = str(content['userId'])
-	productId = str(content['productId'])
-	feedback = content['feedback']
-
-	testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + productId + " and feedback = ''", True).fetchone()
-
-	if testing != None:
-		query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
-
-		return { "msg": "" }
-
-	return { "status": "nonExist" }, 400
 
