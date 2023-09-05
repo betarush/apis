@@ -77,8 +77,11 @@ def get_user_info():
 		else:
 			account = False
 
+		earnings = query("select count(*) from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["count(*)"]
+
 		return {
 			"username": username,
+			"earnings": round(earnings, 2),
 			"paymentDone": paymentMethod,
 			"bankaccountDone": account
 		}
