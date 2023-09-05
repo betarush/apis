@@ -81,7 +81,7 @@ def get_user_info():
 
 		return {
 			"username": username,
-			"earnings": round(earnings, 2),
+			"earnings": round(earnings * 2, 2),
 			"paymentDone": paymentMethod,
 			"bankaccountDone": account
 		}
@@ -161,8 +161,6 @@ def submit_payment_info():
 				source=card
 			)
 
-			print(tokens["creator"])
-
 		query("update user set paymentInfo = '" + json.dumps(paymentInfo) + "' where id = " + userId)
 
 		return { "msg": "" }
@@ -202,7 +200,7 @@ def submit_bankaccount_info():
 			bankaccountInfo["accountNumber"] = accountNumber
 			bankaccountInfo["line1"] = line1
 
-			# token = stripe.Token.create(
+			# bankaccount = stripe.Token.create(
 			# 	bank_account={
 			# 		"country": country,
 			# 		"currency": currency,
@@ -212,6 +210,8 @@ def submit_bankaccount_info():
 			# 		"account_number": accountNumber
 			# 	}
 			# )
+			bankaccount = "btok_us_verified"
+
 
 			day = dob[2:4]
 			month = dob[:2]
@@ -239,7 +239,7 @@ def submit_bankaccount_info():
 			  	"first_name": firstName,
 			  	"last_name": lastName
 			  },
-			  external_account="btok_us_verified",
+			  external_account=bankaccount,
 			  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"},
 			  settings={
 			  	"payouts": { 
@@ -256,29 +256,46 @@ def submit_bankaccount_info():
 
 	return { "status": "nonExist" }, 400
 
+@app.route("/get_earnings", methods=["POST"])
+def get_earnings():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	tester = query("select email, tokens from user where id = " + userId, True).fetchone()
+	tokens = json.loads(tester["tokens"])
+
+	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
+	earnedAmount = 0.0
+
+	for info in earnings:
+		product = query("select name, otherInfo from product where id = " + str(info["productId"]), True).fetchone()
+		otherInfo = json.loads(product["otherInfo"])
+		charge = otherInfo["charge"]
+		transferGroup = otherInfo["transferGroup"]
+		amount = 2.00
+
+		stripe.Transfer.create(
+			amount=int(amount * 100),
+			currency="cad",
+			description="Rewarded $2.00 to tester: " + tester["email"] + " of product: " + product["name"],
+			destination=tokens["account"],
+			source_transaction=charge,
+			transfer_group=transferGroup
+		)
+
+		earnedAmount += amount
+
+		query("delete from product_testing where id = " + str(info["id"]))
+
+	return { "earnedAmount": earnedAmount }
+
 @app.route("/reward_customer", methods=["POST"])
 def reward_customer():
 	content = request.get_json()
 
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
-
-	tester = query("select email, tokens from user where id = " + testerId, True).fetchone()
-	product = query("select name, otherInfo from product where id = " + str(productId), True).fetchone()
-	otherInfo = json.loads(product["otherInfo"])
-	tokens = json.loads(tester["tokens"])
-	charge = otherInfo["charge"]
-	transferGroup = otherInfo["transferGroup"]
-
-	amount = 2.00
-	# stripe.Transfer.create(
-	# 	amount=int(amount * 100),
-	# 	currency="cad",
-	# 	description="Rewarded $2.00 to tester: " + tester["email"] + " of product: " + product["name"],
-	# 	destination=tokens["account"],
-	# 	source_transaction=charge,
-	# 	transfer_group=transferGroup
-	# )
 
 	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
 

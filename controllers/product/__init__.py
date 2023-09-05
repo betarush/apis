@@ -44,8 +44,7 @@ def list_product():
 			amount=int(amount * 100),
 			currency="cad",
 			customer=tokens["creator"],
-			transfer_group=transferGroup,
-			capture=False
+			transfer_group=transferGroup
 		)
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
