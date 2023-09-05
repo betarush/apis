@@ -67,7 +67,7 @@ def get_user_info():
 
 		if tokens["creator"] != "":
 			paymentMethod = stripe.Customer.retrieve(tokens["creator"])
-			paymentMethod = paymentMethod.default_source != ""
+			paymentMethod = paymentMethod.default_source != None
 		else:
 			paymentMethod = False
 
@@ -237,7 +237,12 @@ def submit_bankaccount_info():
 			  	"last_name": lastName
 			  },
 			  external_account="btok_us_verified",
-			  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"}
+			  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"},
+			  settings={
+			  	"payouts": { 
+			  		"schedule": {"interval": "manual"}
+			  	}
+			  }
 			)
 
 			tokens["account"] = account.id
@@ -247,4 +252,32 @@ def submit_bankaccount_info():
 		return { "msg": "" }
 
 	return { "status": "nonExist" }, 400
+
+@app.route("/reward_customer", methods=["POST"])
+def reward_customer():
+	content = request.get_json()
+
+	productId = str(content['productId'])
+	testerId = str(content['testerId'])
+
+	tester = query("select email, tokens from user where id = " + testerId, True).fetchone()
+	product = query("select name, otherInfo from product where id = " + str(productId), True).fetchone()
+	otherInfo = json.loads(product["otherInfo"])
+	tokens = json.loads(tester["tokens"])
+	charge = otherInfo["charge"]
+	transferGroup = otherInfo["transferGroup"]
+
+	amount = 2.00
+	# stripe.Transfer.create(
+	# 	amount=int(amount * 100),
+	# 	currency="cad",
+	# 	description="Rewarded $2.00 to tester: " + tester["email"] + " of product: " + product["name"],
+	# 	destination=tokens["account"],
+	# 	source_transaction=charge,
+	# 	transfer_group=transferGroup
+	# )
+
+	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
+
+	return { "msg": "" }
 
