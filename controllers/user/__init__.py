@@ -127,6 +127,7 @@ def submit_payment_info():
 	number = content['number']
 	cvc = content['cvc']
 	expdate = content['expdate']
+	token = content['token']
 
 	user = query("select id, tokens, paymentInfo from user where id = " + userId, True).fetchone()
 
@@ -140,25 +141,16 @@ def submit_payment_info():
 		paymentInfo["expdate"] = expdate
 
 		customer = stripe.Customer.list_sources(tokens["creator"], object="card", limit=1)
-		# card = stripe.Token.create(
-		# 	card={
-		# 		"number": number,
-		# 		"exp_month": int(expdate[:2]),
-		# 		"exp_year": int(expdate[2:6]),
-		# 		"cvc": cvc
-		# 	}
-		# )
-		card = "tok_bypassPending"
 
 		if len(customer.data) == 0:
 			stripe.Customer.create_source(
 				tokens["creator"],
-				source=card
+				source=token
 			)
 		else:
 			stripe.Customer.modify(
 				tokens["creator"],
-				source=card
+				source=token
 			)
 
 		query("update user set paymentInfo = '" + json.dumps(paymentInfo) + "' where id = " + userId)
@@ -181,6 +173,7 @@ def submit_bankaccount_info():
 	currency = content['currency']
 	routingNumber = content['routingNumber']
 	accountNumber = content['accountNumber']
+	token = content['token']
 
 	user = query("select id, email, tokens, bankaccountInfo from user where id = " + userId, True).fetchone()
 
@@ -199,19 +192,6 @@ def submit_bankaccount_info():
 			bankaccountInfo["routingNumber"] = routingNumber
 			bankaccountInfo["accountNumber"] = accountNumber
 			bankaccountInfo["line1"] = line1
-
-			# bankaccount = stripe.Token.create(
-			# 	bank_account={
-			# 		"country": country,
-			# 		"currency": currency,
-			# 		"account_holder_name": firstName + " " + lastName,
-			# 		"account_holder_type": "individual",
-			# 		"routing_number": routingNumber,
-			# 		"account_number": accountNumber
-			# 	}
-			# )
-			bankaccount = "btok_us_verified"
-
 
 			day = dob[2:4]
 			month = dob[:2]
@@ -239,13 +219,8 @@ def submit_bankaccount_info():
 			  	"first_name": firstName,
 			  	"last_name": lastName
 			  },
-			  external_account=bankaccount,
-			  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"},
-			  settings={
-			  	"payouts": { 
-			  		"schedule": {"interval": "manual"}
-			  	}
-			  }
+			  external_account=token,
+			  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"}
 			)
 
 			tokens["account"] = account.id
@@ -297,7 +272,21 @@ def reward_customer():
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
 
+	product = query("select amount from product where id = " + productId, True).fetchone()
+	amount = float(product["amount"]) - 2
+
+	query("update product set amount = " + str(round(amount, 2)) + " where id = " + productId)
 	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
 
 	return { "msg": "" }
 
+@app.route("/reject_feedback", methods=["POST"])
+def reject_feedback():
+	content = request.get_json()
+
+	productId = str(content['productId'])
+	testerId = str(content['testerId'])
+
+	query("delete from product_testing where productId = " + productId + " and testerId = " + testerId)
+
+	return { "msg": "" }

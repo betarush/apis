@@ -48,7 +48,7 @@ def list_product():
 		)
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
-		query("insert into product (name, image, info, link, creatorId, otherInfo) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "')")
+		query("insert into product (name, image, info, link, creatorId, otherInfo, amount) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(amount, 2)) + ")")
 
 		return { "msg": "" }
 
@@ -65,11 +65,13 @@ def get_untested_products():
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and testerId = " + userId + " and feedback = '') > 0"
 	sql += " or "
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
-	sql += ")"
+	sql += ") and amount > 0"
 
 	datas = query(sql, True).fetchall()
 
 	for data in datas:
+		amount = float(data["amount"])
+
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
@@ -77,8 +79,7 @@ def get_untested_products():
 
 		data["trying"] = testing != None
 
-		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = ''", True).fetchone()["count(*)"]
-		data["numTried"] = 5 - testing
+		data["numTried"] = amount / 2
 
 	return { "products": datas }
 
@@ -121,11 +122,12 @@ def get_my_products():
 		charge = stripe.Charge.retrieve(otherInfo["charge"])
 		data["amountSpent"] = round(charge.amount / 100, 2)
 
-		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchone()["count(*)"]
-		tested = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 1", True).fetchone()["count(*)"]
+		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0", True).fetchone()["count(*)"]
+		tested = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchone()["count(*)"]
 
 		data["numTesting"] = testing
-		data["numTested"] = tested
+		data["numFeedback"] = tested
+		data["numTested"] = 5 - (int(data["amount"]) / 2)
 
 	return { "products": datas }
 

@@ -16,7 +16,7 @@ db_host = str(os.getenv("DB_HOST"))
 user = str(os.getenv("USER"))
 password = str(os.getenv("PASS"))
 db_name = str(os.getenv("DB"))
-mysql_str = 'mysql://geottuse:G3ottu53?@localhost/getstartupfeedback'
+mysql_str = 'mysql://geottuse:G3ottu53?@localhost/getproductfeedback'
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = mysql_str

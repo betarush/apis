@@ -7,7 +7,7 @@ db_host = str(os.getenv("DB_HOST"))
 user = str(os.getenv("USER"))
 password = str(os.getenv("PASS"))
 db_name = str(os.getenv("DB"))
-mysql_str = 'mysql://geottuse:G3ottu53?@localhost/chatee'
+mysql_str = 'mysql://geottuse:G3ottu53?@localhost/getproductfeedback'
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = mysql_str
@@ -46,14 +46,16 @@ class Product(db.Model):
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
 	otherInfo = db.Column(db.String(85), unique=True)
+	amount = db.Column(db.Float)
 
-	def __init__(self, name, image, info, link, creatorId, otherInfo):
+	def __init__(self, name, image, info, link, creatorId, otherInfo, amount):
 		self.name = name
 		self.image = image
 		self.info = info
 		self.link = link
 		self.creatorId = creatorId
 		self.otherInfo = otherInfo
+		self.amount = amount
 
 class ProductTesting(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
