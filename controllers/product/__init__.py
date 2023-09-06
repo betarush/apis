@@ -154,6 +154,7 @@ def get_feedbacks():
 	productId = str(content['productId'])
 
 	feedbacks = query("select id, feedback, testerId from product_testing where productId = " + productId + " and earned = 0", True).fetchall()
+	product = query("select name, image from product where id = " + productId, True).fetchone()
 
 	for info in feedbacks:
 		info["key"] = "feedback-" + str(info["id"])
@@ -161,6 +162,6 @@ def get_feedbacks():
 
 		del info["feedback"]
 
-	return { "feedbacks": feedbacks }
+	return { "feedbacks": feedbacks, "name": product["name"], "logo": json.loads(product["image"] )}
 
 

@@ -77,11 +77,13 @@ def get_user_info():
 		else:
 			account = False
 
-		earnings = query("select count(*) from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["count(*)"]
+		earnings = query("select count(*) as num from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["num"]
+		rejectedReasons = query("select count(*) as num from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchone()["num"]
 
 		return {
 			"username": username,
 			"earnings": round(earnings * 2, 2),
+			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
 			"bankaccountDone": account
 		}
@@ -286,7 +288,9 @@ def reject_feedback():
 
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
+	reason = content['reason']
 
-	query("delete from product_testing where productId = " + productId + " and testerId = " + testerId)
+	query("update product_testing set rejectedReason = '" + reason + "' where productId = " + productId + " and testerId = " + testerId)
 
 	return { "msg": "" }
+

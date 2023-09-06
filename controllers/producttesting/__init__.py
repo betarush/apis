@@ -26,42 +26,26 @@ def submit_feedback():
 	if testing != None:
 		query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
 
-		user = query("select id, email, tokens from user where id = " + userId, True).fetchone()
-
-		if user != None:
-			# tokens = json.loads(user["tokens"])
-
-			# if tokens["account"] == "":
-			# 	account = stripe.Account.create(
-			# 		type="custom",
-			# 		country="CA",
-			# 		email=user["email"],
-			# 		capabilities={
-			# 	    "card_payments": {"requested": True},
-			# 	    "transfers": {"requested": True},
-			# 	  },
-			# 	  business_type="individual",
-			# 	  individual={
-			# 	  	"address": { 
-			# 	  		"line1": "1111 Dundas St",
-			# 	  		"postal_code": "M4M3H5" 
-			# 	  	},
-			# 	  	"dob": {
-			# 	  		"day": 31,
-			# 	  		"month": 12,
-			# 	  		"year": 1990
-			# 	  	},
-			# 	  	"first_name": "Jenny",
-			# 	  	"last_name": "Rosen"
-			# 	  },
-			# 	  external_account="btok_us_verified",
-			# 	  tos_acceptance={"date": int(time()), "ip": "8.8.8.8"}
-			# 	)
-
-			# 	tokens["account"] = account.id
-
-			# 	query("update user set tokens = '" + json.dumps(tokens) + "' where id = " + userId)
-
-			return { "msg": "" }
+		return { "msg": "" }
 
 	return { "status": "nonExist" }, 400
+
+@app.route("/get_rejections", methods=["POST"])
+def get_rejections():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	rejections = query("select id, productId, rejectedReason from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchall()
+
+	for rejection in rejections:
+		product = query("select name, image from product where id = " + str(rejection["productId"]), True).fetchone()
+
+		rejection["key"] = "rejection-" + str(rejection["id"])
+		rejection["name"] = product["name"]
+		rejection["logo"] = json.loads(product["image"])
+		rejection["header"] = rejection["rejectedReason"]
+
+		del rejection["rejectedReason"]
+
+	return { "rejections": rejections }
