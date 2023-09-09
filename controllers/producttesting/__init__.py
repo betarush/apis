@@ -36,7 +36,7 @@ def get_rejections():
 
 	userId = str(content['userId'])
 
-	rejections = query("select id, productId, rejectedReason from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchall()
+	rejections = query("select id, productId, feedback, rejectedReason from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchall()
 
 	for rejection in rejections:
 		product = query("select name, image from product where id = " + str(rejection["productId"]), True).fetchone()
@@ -44,7 +44,7 @@ def get_rejections():
 		rejection["key"] = "rejection-" + str(rejection["id"])
 		rejection["name"] = product["name"]
 		rejection["logo"] = json.loads(product["image"])
-		rejection["header"] = rejection["rejectedReason"]
+		rejection["reason"] = rejection["rejectedReason"]
 
 		del rejection["rejectedReason"]
 

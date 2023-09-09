@@ -7,6 +7,8 @@ import stripe
 stripe.api_key = "sk_test_51NmA1PFqjgkiO0WHxOmFjOzgwHorLyTxjyWJ926HiBK10KHnTnh7q8skEmQ5c0NpHxI3mk2fbejMASjazhPlmGkv00L98uIq8G"
 
 photoUrl = os.getenv("PHOTO_URL")
+launchAmount = 20.00
+appFee = 8
 
 def query(sql, output = False):
 	db_host = str(os.getenv("DB_HOST"))
@@ -47,3 +49,13 @@ def getId():
 			break
 	        
 	return char
+
+
+def get_stripe_fee(chargeInfo, amount):
+	currency = chargeInfo.currency
+	country = chargeInfo.payment_method_details.card.country
+
+	percent = 2.9 + (0.2 if currency != "cad" else 0) + (0.6 if country != "CA" else 0)
+	fee = amount * (round(percent / 100, 3)) + 0.3
+
+	return amount - fee

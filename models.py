@@ -26,7 +26,7 @@ class User(db.Model):
 	username = db.Column(db.String(25), unique=True)
 	earnings = db.Column(db.Float())
 	paymentInfo = db.Column(db.String(100))
-	bankaccountInfo = db.Column(db.String(200))
+	bankaccountInfo = db.Column(db.String(220))
 	tokens = db.Column(db.String(75), unique=True)
 
 	def __init__(self, email, password, username, earnings, paymentInfo, bankaccountInfo, tokens):

@@ -38,7 +38,7 @@ def list_product():
 		image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
 		tokens = json.loads(user["tokens"])
 
-		amount = 10.00
+		amount = launchAmount + appFee
 		transferGroup = getId()
 		charge = stripe.Charge.create(
 			amount=int(amount * 100),
@@ -46,9 +46,14 @@ def list_product():
 			customer=tokens["creator"],
 			transfer_group=transferGroup
 		)
+		amount = get_stripe_fee(charge, amount)
+		stripe.Payout.create(
+			amount=int((amount - launchAmount) * 100),
+			currency="cad"
+		)
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
-		query("insert into product (name, image, info, link, creatorId, otherInfo, amount) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(amount, 2)) + ")")
+		query("insert into product (name, image, info, link, creatorId, otherInfo, amount) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ")")
 
 		return { "msg": "" }
 
@@ -79,7 +84,8 @@ def get_untested_products():
 
 		data["trying"] = testing != None
 
-		data["numTried"] = amount / 2
+		data["numTried"] = amount / 4
+		data["reward"] = launchAmount / 5
 
 	return { "products": datas }
 
@@ -120,14 +126,14 @@ def get_my_products():
 
 		otherInfo = json.loads(data["otherInfo"])
 		charge = stripe.Charge.retrieve(otherInfo["charge"])
-		data["amountSpent"] = round(charge.amount / 100, 2)
+		data["amountSpent"] = round(launchAmount, 2)
 
 		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0", True).fetchone()["count(*)"]
 		tested = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchone()["count(*)"]
 
 		data["numTesting"] = testing
 		data["numFeedback"] = tested
-		data["numTested"] = 5 - (int(data["amount"]) / 2)
+		data["numTested"] = 5 - (int(data["amount"]) / (launchAmount / 5))
 
 	return { "products": datas }
 

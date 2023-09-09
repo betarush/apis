@@ -8,10 +8,6 @@ from flask_mail import Mail, Message
 
 cors = CORS(app)
 
-# card token: tok_1Nmi4sFqjgkiO0WHePwI3WCk
-# customer token: cus_OZWKZkfijAH65g
-# account token: acct_1NmA1PFqjgkiO0WH
-
 @app.route("/welcome_user")
 def welcome_user():
 	return "startupfeedback: Welcome to user"
@@ -82,7 +78,7 @@ def get_user_info():
 
 		return {
 			"username": username,
-			"earnings": round(earnings * 2, 2),
+			"earnings": round(earnings * (launchAmount / 5), 2),
 			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
 			"bankaccountDone": account
@@ -181,20 +177,20 @@ def submit_bankaccount_info():
 
 	if user != None:
 		tokens = json.loads(user["tokens"])
+		bankaccountInfo = json.loads(user["bankaccountInfo"])
+
+		bankaccountInfo["line1"] = line1
+		bankaccountInfo["zipcode"] = zipcode
+		bankaccountInfo["dob"] = dob
+		bankaccountInfo["firstName"] = firstName
+		bankaccountInfo["lastName"] = lastName
+		bankaccountInfo["currency"] = currency
+		bankaccountInfo["country"] = country
+		bankaccountInfo["routingNumber"] = routingNumber
+		bankaccountInfo["accountNumber"] = accountNumber
+		bankaccountInfo["line1"] = line1
 
 		if tokens["account"] == "":
-			bankaccountInfo = json.loads(user["bankaccountInfo"])
-
-			bankaccountInfo["line1"] = line1
-			bankaccountInfo["zipcode"] = zipcode
-			bankaccountInfo["dob"] = dob
-			bankaccountInfo["firstName"] = firstName
-			bankaccountInfo["lastName"] = lastName
-			bankaccountInfo["country"] = country
-			bankaccountInfo["routingNumber"] = routingNumber
-			bankaccountInfo["accountNumber"] = accountNumber
-			bankaccountInfo["line1"] = line1
-
 			day = dob[2:4]
 			month = dob[:2]
 			year = dob[4:8]
@@ -250,12 +246,12 @@ def get_earnings():
 		otherInfo = json.loads(product["otherInfo"])
 		charge = otherInfo["charge"]
 		transferGroup = otherInfo["transferGroup"]
-		amount = 2.00
+		amount = launchAmount / 5
 
 		stripe.Transfer.create(
 			amount=int(amount * 100),
 			currency="cad",
-			description="Rewarded $2.00 to tester: " + tester["email"] + " of product: " + product["name"],
+			description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
 			destination=tokens["account"],
 			source_transaction=charge,
 			transfer_group=transferGroup
@@ -275,7 +271,7 @@ def reward_customer():
 	testerId = str(content['testerId'])
 
 	product = query("select amount from product where id = " + productId, True).fetchone()
-	amount = float(product["amount"]) - 2
+	amount = float(product["amount"]) - (launchAmount / 5)
 
 	query("update product set amount = " + str(round(amount, 2)) + " where id = " + productId)
 	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
