@@ -25,16 +25,14 @@ class User(db.Model):
 	password = db.Column(db.String(110), unique=True)
 	username = db.Column(db.String(25), unique=True)
 	earnings = db.Column(db.Float())
-	paymentInfo = db.Column(db.String(100))
 	bankaccountInfo = db.Column(db.String(220))
 	tokens = db.Column(db.String(75), unique=True)
 
-	def __init__(self, email, password, username, earnings, paymentInfo, bankaccountInfo, tokens):
+	def __init__(self, email, password, username, earnings, bankaccountInfo, tokens):
 		self.email = email
 		self.password = password
 		self.username = username
 		self.earnings = earnings
-		self.paymentInfo = paymentInfo
 		self.bankaccountInfo = bankaccountInfo
 		self.tokens = tokens
 

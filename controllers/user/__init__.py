@@ -20,7 +20,6 @@ def register():
 	password = content['password']
 	username = "user" + getId()
 
-	paymentInfo = json.dumps({ "name": "", "number": "", "cvc": "", "expdate": "" })
 	bankaccountInfo = json.dumps({"line1": "", "zipcode": "", "dob": {"day": 0, "month": 0, "year": 0}, "firstName": "", "lastName": ""})
 
 	creator = stripe.Customer.create(
@@ -30,7 +29,7 @@ def register():
 
 	tokens = json.dumps({ "creator": creator.id, "account": "" })
 
-	userId = query("insert into user (email, password, username, earnings, paymentInfo, bankaccountInfo, tokens) values ('" + email + "', '" + generate_password_hash(password) + "', '" + username + "', 0.0, '" + paymentInfo + "', '" + bankaccountInfo + "', '" + tokens + "')", True).lastrowid
+	userId = query("insert into user (email, password, username, earnings, bankaccountInfo, tokens) values ('" + email + "', '" + generate_password_hash(password) + "', '" + username + "', 0.0, '" + bankaccountInfo + "', '" + tokens + "')", True).lastrowid
 
 	return { "id": userId }
 
@@ -92,12 +91,27 @@ def get_payment_info():
 
 	userId = str(content['userId'])
 
-	user = query("select paymentInfo from user where id = " + userId, True).fetchone()
+	user = query("select tokens from user where id = " + userId, True).fetchone()
 
 	if user != None:
-		paymentInfo = json.loads(user["paymentInfo"])
+		tokens = json.loads(user["tokens"])
 
-		return paymentInfo
+		customer = stripe.Customer.retrieve(tokens["creator"])
+		card = None
+
+		if customer.default_source != None:
+			card = stripe.Customer.retrieve_source(
+				tokens["creator"],
+				customer.default_source
+			)
+			card = {
+				"name": card.brand,
+				"last4": card.last4
+			}
+
+			# MasterCard, American Express, Discover, Diners Club, JCB, UnionPay
+
+		return { "card": card }
 
 	return { "status": "nonExist" }, 400
 
@@ -107,12 +121,21 @@ def get_bankaccount_info():
 
 	userId = str(content['userId'])
 
-	user = query("select bankaccountInfo from user where id = " + userId, True).fetchone()
+	user = query("select tokens from user where id = " + userId, True).fetchone()
 
 	if user != None:
-		bankaccountInfo = json.loads(user["bankaccountInfo"])
+		tokens = json.loads(user["tokens"])
+		account = None
 
-		return bankaccountInfo
+		if tokens["account"] != "":
+			account = stripe.Account.retrieve(tokens["account"])
+			account = account.external_accounts.data[0]
+			account = {
+				"name": account.bank_name,
+				"last4": account.last4
+			}
+
+		return { "bank": account }
 
 	return { "status": "nonExist" }, 400
 
@@ -121,23 +144,12 @@ def submit_payment_info():
 	content = request.get_json()
 
 	userId = str(content['userId'])
-	name = content['name']
-	number = content['number']
-	cvc = content['cvc']
-	expdate = content['expdate']
 	token = content['token']
 
-	user = query("select id, tokens, paymentInfo from user where id = " + userId, True).fetchone()
+	user = query("select id, tokens from user where id = " + userId, True).fetchone()
 
 	if user != None:
 		tokens = json.loads(user["tokens"])
-		paymentInfo = json.loads(user["paymentInfo"])
-
-		paymentInfo["name"] = name
-		paymentInfo["number"] = number
-		paymentInfo["cvc"] = cvc
-		paymentInfo["expdate"] = expdate
-
 		customer = stripe.Customer.list_sources(tokens["creator"], object="card", limit=1)
 
 		if len(customer.data) == 0:
@@ -150,8 +162,6 @@ def submit_payment_info():
 				tokens["creator"],
 				source=token
 			)
-
-		query("update user set paymentInfo = '" + json.dumps(paymentInfo) + "' where id = " + userId)
 
 		return { "msg": "" }
 
@@ -168,9 +178,6 @@ def submit_bankaccount_info():
 	firstName = content['firstName']
 	lastName = content['lastName']
 	country = content['country']
-	currency = content['currency']
-	routingNumber = content['routingNumber']
-	accountNumber = content['accountNumber']
 	token = content['token']
 
 	user = query("select id, email, tokens, bankaccountInfo from user where id = " + userId, True).fetchone()
@@ -184,10 +191,7 @@ def submit_bankaccount_info():
 		bankaccountInfo["dob"] = dob
 		bankaccountInfo["firstName"] = firstName
 		bankaccountInfo["lastName"] = lastName
-		bankaccountInfo["currency"] = currency
 		bankaccountInfo["country"] = country
-		bankaccountInfo["routingNumber"] = routingNumber
-		bankaccountInfo["accountNumber"] = accountNumber
 		bankaccountInfo["line1"] = line1
 
 		if tokens["account"] == "":

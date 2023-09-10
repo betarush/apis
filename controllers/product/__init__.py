@@ -59,6 +59,43 @@ def list_product():
 
 	return { "status": "nonExist" }, 400
 
+@app.route("/relist_product", methods=["POST"])
+def relist_product():
+	content = request.get_json()
+
+	productId = str(content['productId'])
+
+	product = query("select creatorId, otherInfo, amount from product where id = " + productId, True).fetchone()
+
+	if product != None:
+		creatorId = str(product["creatorId"])
+		otherInfo = json.loads(product["otherInfo"])
+		amount = int(product["amount"])
+
+		creator = query("select tokens from user where id = " + creatorId, True).fetchone()
+		tokens = json.loads(creator["tokens"])
+
+		amount = launchAmount + appFee
+		transferGroup = getId()
+		charge = stripe.Charge.create(
+			amount=int(amount * 100),
+			currency="cad",
+			customer=tokens["creator"],
+			transfer_group=transferGroup
+		)
+		amount = get_stripe_fee(charge, amount)
+		stripe.Payout.create(
+			amount=int((amount - launchAmount) * 100),
+			currency="cad"
+		)
+		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
+
+		query("update product set amount = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
+
+		return { "msg": "" }
+
+	return { "status": "nonExist" }, 400
+
 @app.route("/get_untested_products", methods=["POST"])
 def get_untested_products():
 	content = request.get_json()
@@ -67,8 +104,6 @@ def get_untested_products():
 
 	sql = "select * from product where not creatorId = " + userId
 	sql += " and ("
-	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and testerId = " + userId + " and feedback = '') > 0"
-	sql += " or "
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
 	sql += ") and amount > 0"
 
@@ -107,6 +142,7 @@ def get_tested_products():
 		testing = query("select earned from product_testing where productId = " + str(data["id"]), True).fetchone()
 
 		data["earned"] = testing["earned"] == True
+		data["reward"] = 0
 
 	return { "products": datas }
 

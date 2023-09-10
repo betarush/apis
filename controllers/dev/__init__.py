@@ -28,6 +28,19 @@ def read_charge():
 
 	return { "country": country, "currency": currency, "timenow": timenow, "updatenow": timenow >= updatetime }
 
+@app.route("/create_card")
+def create_card():
+	card = stripe.Token.create(
+	  card={
+	    "number": "4000002500001001",
+	    "exp_month": 9,
+	    "exp_year": 2024,
+	    "cvc": "314",
+	  },
+	)
+
+	return card
+
 @app.route("/simulate")
 def simulate():
 	runTime = 0
