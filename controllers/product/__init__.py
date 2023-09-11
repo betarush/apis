@@ -9,7 +9,15 @@ from binascii import a2b_base64
 from time import time
 import os, json
 
+app.config['MAIL_SERVER']='smtp.zoho.com'
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = 'admin@geottuse.com'
+app.config['MAIL_PASSWORD'] = 'q0rtghsdui!Fwug'
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
+
 cors = CORS(app)
+mail = Mail(app)
 
 @app.route("/welcome_product")
 def welcome_product():
@@ -131,7 +139,7 @@ def get_tested_products():
 	userId = str(content['userId'])
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + " and not feedback = '') > 0"
+	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0"
 
 	datas = query(sql, True).fetchall()
 
@@ -139,10 +147,11 @@ def get_tested_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select earned from product_testing where productId = " + str(data["id"]), True).fetchone()
+		testing = query("select earned, feedback from product_testing where productId = " + str(data["id"]), True).fetchone()
 
 		data["earned"] = testing["earned"] == True
-		data["reward"] = 0
+		data["gave_feedback"] = testing["feedback"] != ""
+		data["reward"] = launchAmount / 5
 
 	return { "products": datas }
 
@@ -185,9 +194,46 @@ def try_product():
 	testing = query("select * from product_testing where testerId = " + userId + " and productId = " + productId, True).fetchone()
 
 	if testing == None: # haven't tried yet
-		query("insert into product_testing (testerId, productId, feedback, earned) values (" + userId + ", " + productId + ", '', 0)")
+		product = query("select creatorId, name from product where id = " + productId, True).fetchone()
+		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
-	return { "msg": "" }
+		msg = Message(
+			"A customer is trying out your product",
+			sender=('Product Feedback', 'admin@geottuse.com'),
+			recipients = [creator["email"]],
+			html="""
+				<html>
+					<head>
+						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+						<style>.button:hover { background-color: #000000; color: white; }</style>
+					</head>
+					<body>
+						<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;">
+							<div style='width: 100%;'>
+								<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
+									<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
+								</div>
+							</div>
+							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
+								Yay! Someone is currently using your product, """ + product["name"] + """
+							</div>
+						</div>
+					</body>
+				</html>
+			"""
+		)
+
+		try:
+			mail.send(msg)
+
+			query("insert into product_testing (testerId, productId, feedback, earned) values (" + userId + ", " + productId + ", '', 0)")
+
+			return { "msg": "" }
+		except:
+			print("")
+
+	return { "status": "failed to send" }, 400
 
 @app.route("/get_feedbacks", methods=["POST"])
 def get_feedbacks():

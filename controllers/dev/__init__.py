@@ -9,7 +9,15 @@ from binascii import a2b_base64
 from time import time, sleep
 import os, json, pytz, datetime
 
+app.config['MAIL_SERVER']='smtp.zoho.com'
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = 'admin@geottuse.com'
+app.config['MAIL_PASSWORD'] = 'q0rtghsdui!Fwug'
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
+
 cors = CORS(app)
+mail = Mail(app)
 
 @app.route("/welcome_dev")
 def welcome_dev():
@@ -152,5 +160,41 @@ def reset():
 	query("alter table user auto_increment = 1")
 	query("alter table product auto_increment = 1")
 	query("alter table product_testing auto_increment = 1")
+
+	return { "msg": "" }
+
+@app.route("/send_email")
+def send_email():
+	msg = Message(
+		"A customer gave you a feedback on your product",
+		sender=('Product Feedback', 'admin@geottuse.com'),
+		recipients = ["kmrobogram@gmail.com"],
+		html="""
+			<html>
+				<head>
+					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+					<style>.button:hover { background-color: #000000; color: white; }</style>
+				</head>
+				<body>
+					<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;">
+						<div style='width: 100%;'>
+							<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
+								<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
+							</div>
+						</div>
+						<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
+							Yes! Someone just tried your product,  and gave you a feedback
+						</div>
+						<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
+							<a class="button" style="border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;" href="https://www.getproductfeedback.com/feedback">Check it out</a>
+						</div>
+					</div>
+				</body>
+			</html>
+		"""
+	)
+
+	mail.send(msg)
 
 	return { "msg": "" }

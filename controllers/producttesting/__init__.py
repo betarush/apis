@@ -6,7 +6,15 @@ from models import *
 from functions import *
 from flask_mail import Mail, Message
 
+app.config['MAIL_SERVER']='smtp.zoho.com'
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = 'admin@geottuse.com'
+app.config['MAIL_PASSWORD'] = 'q0rtghsdui!Fwug'
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
+
 cors = CORS(app)
+mail = Mail(app)
 
 @app.route("/welcome_testing")
 def welcome_testing():
@@ -20,13 +28,49 @@ def submit_feedback():
 	productId = str(content['productId'])
 	feedback = content['feedback']
 
-	product = query("select otherInfo from product where id = " + productId, True).fetchone()
+	product = query("select name, otherInfo, creatorId from product where id = " + productId, True).fetchone()
 	testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + productId + " and feedback = ''", True).fetchone()
+	creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
 	if testing != None:
-		query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
+		msg = Message(
+			"A customer gave you a feedback on your product",
+			sender=('Product Feedback', 'admin@geottuse.com'),
+			recipients = [creator["email"]],
+			html="""
+				<html>
+					<head>
+						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
+						<style>.button:hover { background-color: #000000; color: white; }</style>
+					</head>
+					<body>
+						<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;">
+							<div style='width: 100%;'>
+								<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
+									<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
+								</div>
+							</div>
+							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
+								Yes! Someone just tried your product, """ + product["name"] + """ and gave you a feedback
+							</div>
+							<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
+								<a class="button" style="border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;" href="https://www.getproductfeedback.com/feedback/""" + productId + """>Check it out</a>
+							</div>
+						</div>
+					</body>
+				</html>
+			"""
+		)
 
-		return { "msg": "" }
+		try:
+			mail.send(msg)
+
+			query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
+
+			return { "msg": "" }
+		except:
+			print("")
 
 	return { "status": "nonExist" }, 400
 
