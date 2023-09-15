@@ -55,7 +55,10 @@ def simulate():
 	creator = None
 	account = None
 
-	while runTime < 100:
+	# pm_card_bypassPending
+	# pm_card_us
+
+	while runTime < 10:
 		if creator == None: # list product
 			creator = stripe.Customer.list(limit=1)
 
@@ -66,9 +69,16 @@ def simulate():
 					description="First startup product creator",
 					email="dsldk@gmail.com"
 				)
-				stripe.Customer.create_source(
-					creator.id,
-					source="tok_bypassPending"
+
+			paymentMethod = stripe.Customer.list_payment_methods(
+			  creator.id,
+			  type="card",
+			)
+
+			if len(paymentMethod.data) == 0:
+				stripe.PaymentMethod.attach(
+					"pm_card_bypassPending",
+					customer=creator.id
 				)
 
 		if account == None: # receive payment
@@ -105,36 +115,63 @@ def simulate():
 				)
 
 		amount = launchAmount + appFee
-		transferGroup = "a transfer group: " + str(time())
-		charge = stripe.Charge.create(
+		transferGroup = getId()
+		paymentMethod = stripe.Customer.list_payment_methods(
+		  creator.id,
+		  type="card",
+		)
+		methodId = paymentMethod.data[0].id
+		charge = stripe.PaymentIntent.create(
 			amount=int(amount * 100),
 			currency="cad",
 			customer=creator.id,
-			transfer_group=transferGroup
+			payment_method=methodId,
+			transfer_group=transferGroup,
+			confirm=True,
+			automatic_payment_methods={
+				"enabled": True,
+				"allow_redirects": "never"
+			}
 		)
-		amount = get_stripe_fee(charge, amount)
+		print("creator paid: $" + str(round(amount, 2)))
+		chargeInfo = {
+			"country": paymentMethod.data[0].card.country,
+			"currency": charge.currency
+		}
+		amount = get_stripe_fee(chargeInfo, amount)
 		payoutAmount = round(amount - launchAmount, 2)
-		stripe.Payout.create(
-			currency="cad",
-			amount=int(payoutAmount * 100)
-		)
-		print("creator paid: $" + str(round(launchAmount + appFee, 2)))
-		print("payout to owner account: $" + str(round(payoutAmount, 2)))
+
+		balance = get_balance()
+
+		if balance >= int(payoutAmount * 100):
+			stripe.Payout.create(
+				currency="cad",
+				amount=int(payoutAmount * 100)
+			)
+			print("payout to owner account: $" + str(round(payoutAmount, 2)))
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('', '', " + str(int(payoutAmount * 100)) + ", " + str(time()) + ")")
+			print("inserted into pending payout")
 
 		# payout
 		num = [1, 2, 3, 4, 5]
 		amount = launchAmount / 5
 
 		for n in num:
-			result = stripe.Transfer.create(
-				amount=int(amount*100),
-				currency="cad",
-				description="Payout $" + str(round(amount, 2)) + " to tester: " + str(n),
-				destination=account.id,
-				source_transaction=charge.id,
-				transfer_group=transferGroup
-			)
-			print("$" + str(round(amount, 2)) + " transferred to tester: " + str(n))
+			balance = get_balance()
+
+			if balance >= int(amount * 100):
+				result = stripe.Transfer.create(
+					amount=int(amount * 100),
+					currency="cad",
+					description="Payout $" + str(round(amount, 2)) + " to tester: " + str(n),
+					destination=account.id,
+					transfer_group=transferGroup
+				)
+				print("$" + str(round(amount, 2)) + " transferred to tester: " + str(n))
+			else:
+				query("insert into pending_payout (accountId, transferGroup, amount, created) values ('" + account.id + "', '" + transferGroup + "', " + str(int(amount * 100)) + ", " + str(time()) + ")")
+				print("inserted into pending payout for tester")
 
 		balance = stripe.Balance.retrieve()
 		runTime += 1
@@ -156,12 +193,30 @@ def reset():
 	query("delete from user")
 	query("delete from product")
 	query("delete from product_testing")
+	query("delete from pending_payout")
 
 	query("alter table user auto_increment = 1")
 	query("alter table product auto_increment = 1")
 	query("alter table product_testing auto_increment = 1")
+	query("alter table pending_payout auto_increment = 1")
 
 	return { "msg": "" }
+
+@app.route("/charge")
+def charge():
+	info = stripe.PaymentIntent.create(
+		amount=2000,
+		currency="cad",
+		customer="cus_OdbGiPhpIPaKPt",
+		payment_method="pm_card_bypassPending",
+		automatic_payment_methods={
+			"enabled": True,
+			"allow_redirects": "never"
+		}
+	)
+	info = stripe.PaymentIntent.confirm(info.id)
+
+	return { "info": info }
 
 @app.route("/send_email")
 def send_email():

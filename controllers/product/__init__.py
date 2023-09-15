@@ -45,20 +45,42 @@ def list_product():
 	if user != None:
 		image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
 		tokens = json.loads(user["tokens"])
+		paymentMethod = stripe.Customer.list_payment_methods(
+		  tokens["creator"],
+		  type="card",
+		)
+		methodId = paymentMethod.data[0].id
 
 		amount = launchAmount + appFee
 		transferGroup = getId()
-		charge = stripe.Charge.create(
+		charge = stripe.PaymentIntent.create(
 			amount=int(amount * 100),
 			currency="cad",
 			customer=tokens["creator"],
-			transfer_group=transferGroup
+			payment_method=methodId,
+			transfer_group=transferGroup,
+			confirm=True,
+			automatic_payment_methods={
+				"enabled": True,
+				"allow_redirects": "never"
+			}
 		)
-		amount = get_stripe_fee(charge, amount)
-		stripe.Payout.create(
-			amount=int((amount - launchAmount) * 100),
-			currency="cad"
-		)
+		chargeInfo = {
+			"country": paymentMethod.data[0].card.country,
+			"currency": charge.currency
+		}
+		amount = get_stripe_fee(chargeInfo, amount)
+		payoutAmount = int((amount - launchAmount) * 100)
+		balance = get_balance()
+
+		if balance >= payoutAmount:
+			stripe.Payout.create(
+				amount=payoutAmount,
+				currency="cad"
+			)
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('', '', " + str(payoutAmount) + ", " + str(time()) + ")")
+
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
 		query("insert into product (name, image, info, link, creatorId, otherInfo, amount) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ")")
@@ -82,21 +104,43 @@ def relist_product():
 
 		creator = query("select tokens from user where id = " + creatorId, True).fetchone()
 		tokens = json.loads(creator["tokens"])
+		paymentMethod = stripe.Customer.list_payment_methods(
+		  tokens["creator"],
+		  type="card",
+		)
+		methodId = paymentMethod.data[0].id
 
 		amount = launchAmount + appFee
 		transferGroup = getId()
-		charge = stripe.Charge.create(
+		charge = stripe.PaymentIntent.create(
 			amount=int(amount * 100),
 			currency="cad",
 			customer=tokens["creator"],
-			transfer_group=transferGroup
+			payment_method=methodId,
+			transfer_group=transferGroup,
+			confirm=True,
+			automatic_payment_methods={
+				"enabled": True,
+				"allow_redirects": "never"
+			}
 		)
-		amount = get_stripe_fee(charge, amount)
-		stripe.Payout.create(
-			amount=int((amount - launchAmount) * 100),
-			currency="cad"
-		)
-		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
+		chargeInfo = {
+			"country": paymentMethod.data[0].card.country,
+			"currency": charge.currency
+		}
+		amount = get_stripe_fee(chargeInfo, amount)
+		payoutAmount = int((amount - launchAmount) * 100)
+		balance = get_balance()
+
+		if balance >= payoutAmount:
+			stripe.Payout.create(
+				amount=payoutAmount,
+				currency="cad"
+			)
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('', '', " + str(payoutAmount) + ", " + str(time()) + ")")
+
+		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup })
 
 		query("update product set amount = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
 
@@ -170,7 +214,7 @@ def get_my_products():
 		data["logo"] = json.loads(data["image"])
 
 		otherInfo = json.loads(data["otherInfo"])
-		charge = stripe.Charge.retrieve(otherInfo["charge"])
+		charge = stripe.PaymentIntent.retrieve(otherInfo["charge"])
 		data["amountSpent"] = round(launchAmount, 2)
 
 		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0", True).fetchone()["count(*)"]

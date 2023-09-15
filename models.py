@@ -69,3 +69,16 @@ class ProductTesting(db.Model):
 		self.feedback = feedback
 		self.earned = earned
 		self.rejectedReason = rejectedReason
+
+class PendingPayout(db.Model):
+	id = db.Column(db.Integer, primary_key=True)
+	accountId = db.Column(db.String(25))
+	transferGroup = db.Column(db.String(25))
+	amount = db.Column(db.Integer)
+	created = db.Column(db.Integer)
+
+	def __init__(self, accountId, transferGroup, amount, created):
+		self.accountId = accountId
+		self.transferGroup = transferGroup
+		self.amount = amount
+		self.created = created

@@ -96,12 +96,10 @@ def verify():
 
 	try:
 		mail.send(msg)
-
-		return { "verifycode": verifyCode }
 	except:
 		print("")
 
-	return { "status": "" }, 400
+	return { "verifycode": verifyCode }
 
 @app.route("/get_user_info", methods=["POST"])
 def get_user_info():
@@ -116,8 +114,11 @@ def get_user_info():
 		tokens = json.loads(user["tokens"])
 
 		if tokens["creator"] != "":
-			paymentMethod = stripe.Customer.retrieve(tokens["creator"])
-			paymentMethod = paymentMethod.default_source != None
+			paymentMethod = stripe.Customer.list_payment_methods(
+			  tokens["creator"],
+			  type="card",
+			)
+			paymentMethod = len(paymentMethod.data) > 0
 		else:
 			paymentMethod = False
 
@@ -299,28 +300,78 @@ def get_earnings():
 
 	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
 	earnedAmount = 0.0
+	pendingEarned = 0.0
 
 	for info in earnings:
 		product = query("select name, otherInfo from product where id = " + str(info["productId"]), True).fetchone()
 		otherInfo = json.loads(product["otherInfo"])
-		charge = otherInfo["charge"]
 		transferGroup = otherInfo["transferGroup"]
 		amount = launchAmount / 5
 
-		stripe.Transfer.create(
-			amount=int(amount * 100),
-			currency="cad",
-			description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
-			destination=tokens["account"],
-			source_transaction=charge,
-			transfer_group=transferGroup
-		)
+		transferAmount = int(amount * 100)
+		balance = get_balance()
 
-		earnedAmount += amount
+		if balance >= transferAmount:
+			stripe.Transfer.create(
+				amount=transferAmount,
+				currency="cad",
+				description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
+				destination=tokens["account"],
+				transfer_group=transferGroup
+			)
+
+			earnedAmount += amount
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", " + str(time()) + ")")
+
+			pendingEarned += amount
 
 		query("delete from product_testing where id = " + str(info["id"]))
 
-	return { "earnedAmount": earnedAmount }
+	return { 
+		"earnedAmount": earnedAmount,
+		"pendingEarned": pendingEarned
+	}
+
+@app.route("/create_checkout", methods=["POST"])
+def create_checkout():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	user = query("select tokens from user where id = " + userId, True).fetchone()
+	tokens = json.loads(user["tokens"])
+
+	session = stripe.checkout.Session.create(
+	  payment_method_types=['card'],
+	  mode='setup',
+	  customer=tokens["creator"],
+	  success_url=os.getenv("CLIENT_URL") + '/listproduct?session_id={CHECKOUT_SESSION_ID}',
+	  cancel_url=os.getenv("CLIENT_URL") + '/listproduct',
+	)
+
+	return { "url": session.url }
+
+@app.route("/create_customer_payment", methods=["POST"])
+def create_customer_payment():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+	sessionId = content['sessionId']
+
+	user = query("select tokens from user where id = " + userId, True).fetchone()
+	tokens = json.loads(user["tokens"])
+	creatorId = tokens["creator"]
+
+	info = stripe.checkout.Session.retrieve(sessionId)
+	info = stripe.SetupIntent.retrieve(info.setup_intent)
+
+	info = stripe.PaymentMethod.attach(
+	  info.payment_method,
+	  customer=creatorId,
+	)
+
+	return { "msg": "" }
 
 @app.route("/reward_customer", methods=["POST"])
 def reward_customer():

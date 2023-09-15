@@ -50,12 +50,16 @@ def getId():
 	        
 	return char
 
-
 def get_stripe_fee(chargeInfo, amount):
-	currency = chargeInfo.currency
-	country = chargeInfo.payment_method_details.card.country
+	currency = chargeInfo["currency"]
+	country = chargeInfo["country"]
 
 	percent = 2.9 + (0.2 if currency != "cad" else 0) + (0.6 if country != "CA" else 0)
 	fee = amount * (round(percent / 100, 3)) + 0.3
 
 	return amount - fee
+
+def get_balance():
+	info = stripe.Balance.retrieve()
+
+	return info.available[0].amount
