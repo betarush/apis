@@ -283,6 +283,32 @@ def try_product():
 def get_feedbacks():
 	content = request.get_json()
 
+	userId = str(content['userId'])
+
+	datas = query("select * from product where creatorId = " + userId + " and id in (select productId from product_testing where not feedback = '' and earned = 0)", True).fetchall()
+	products = []
+
+	for data in datas:
+		feedbacks = query("select id, feedback, testerId from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchall()
+
+		for info in feedbacks:
+			info["key"] = "feedback-" + str(data["id"]) + "-" + str(info["id"])
+			info["header"] = info["feedback"]
+
+		products.append({
+			**data,
+			"key": "product-" + str(data["id"]),
+			"name": data["name"],
+			"image": json.loads(data["image"]),
+			"feedbacks": feedbacks
+		})
+
+	return { "products": products }
+
+@app.route("/get_product_feedbacks", methods=["POST"])
+def get_product_feedbacks():
+	content = request.get_json()
+
 	productId = str(content['productId'])
 
 	feedbacks = query("select id, feedback, testerId from product_testing where productId = " + productId + " and earned = 0", True).fetchall()
