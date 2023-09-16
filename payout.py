@@ -19,11 +19,12 @@ with app.app_context():
 		balance = get_balance()
 		k = 0
 
-		numPendings = query("select count(*) as num from pending_payout where amount < " + str(balance + 1), True).fetchone()["num"]
+		numPayoutPending = query("select count(*) as num from pending_payout where amount < " + str(balance + 1), True).fetchone()["num"]
+		numPending = query("select count(*) as num from pending_payout", True).fetchone()["num"]
 
-		print("num pending: " + str(numPendings) + ":" + str(balance))
+		print("num pending: " + str(numPayoutPending) + ":" + str(numPending) + ":" + str(balance))
 
-		if balance > 0 and numPendings > 0:
+		if balance > 0 and numPayoutPending > 0:
 			while True: # part is looping on one record
 				pending = query("select * from pending_payout order by created", True).fetchone()
 				amount = int(pending["amount"])

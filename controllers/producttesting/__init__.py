@@ -65,12 +65,12 @@ def submit_feedback():
 
 		try:
 			mail.send(msg)
-
-			query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
-
-			return { "msg": "" }
 		except:
 			print("")
+
+		query("update product_testing set feedback = '" + pymysql.converters.escape_string(feedback) + "' where id = " + str(testing["id"]))
+
+		return { "msg": "" }
 
 	return { "status": "nonExist" }, 400
 

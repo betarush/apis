@@ -171,7 +171,7 @@ def get_untested_products():
 
 		data["trying"] = testing != None
 
-		data["numTried"] = amount / 4
+		data["numTried"] = amount / rewardAmount
 		data["reward"] = launchAmount / 5
 
 	return { "products": datas }
@@ -270,12 +270,12 @@ def try_product():
 
 		try:
 			mail.send(msg)
-
-			query("insert into product_testing (testerId, productId, feedback, earned) values (" + userId + ", " + productId + ", '', 0)")
-
-			return { "msg": "" }
 		except:
 			print("")
+
+		query("insert into product_testing (testerId, productId, feedback, earned) values (" + userId + ", " + productId + ", '', 0)")
+
+		return { "msg": "" }
 
 	return { "status": "failed to send" }, 400
 

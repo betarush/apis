@@ -7,8 +7,12 @@ import stripe
 stripe.api_key = "sk_test_51NmA1PFqjgkiO0WHxOmFjOzgwHorLyTxjyWJ926HiBK10KHnTnh7q8skEmQ5c0NpHxI3mk2fbejMASjazhPlmGkv00L98uIq8G"
 
 photoUrl = os.getenv("PHOTO_URL")
-launchAmount = 20.00
-appFee = 8
+# launchAmount = 20.00
+# appFee = 8
+
+launchAmount = 10.00
+appFee = 5
+rewardAmount = 10 / 5
 
 def query(sql, output = False):
 	db_host = str(os.getenv("DB_HOST"))

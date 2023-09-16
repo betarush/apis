@@ -136,7 +136,8 @@ def get_user_info():
 			"earnings": round(earnings * (launchAmount / 5), 2),
 			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
-			"bankaccountDone": account
+			"bankaccountDone": account,
+			"rewardAmount": rewardAmount
 		}
 
 	return { "status": "nonExist" }, 400
@@ -311,6 +312,8 @@ def get_earnings():
 		transferAmount = int(amount * 100)
 		balance = get_balance()
 
+		earnedAmount += amount
+
 		if balance >= transferAmount:
 			stripe.Transfer.create(
 				amount=transferAmount,
@@ -319,8 +322,6 @@ def get_earnings():
 				destination=tokens["account"],
 				transfer_group=transferGroup
 			)
-
-			earnedAmount += amount
 		else:
 			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", " + str(time()) + ")")
 
@@ -330,7 +331,7 @@ def get_earnings():
 
 	return { 
 		"earnedAmount": earnedAmount,
-		"pendingEarned": pendingEarned
+		"pendingEarned": pendingEarned > 0
 	}
 
 @app.route("/create_checkout", methods=["POST"])
@@ -386,7 +387,7 @@ def reward_customer():
 
 	try:
 		msg = Message(
-			"Wow, You have been rewarded $4.00",
+			"Wow, You have been rewarded $" + str(round(rewardAmount, 2)),
 			sender=('Product Feedback', 'admin@geottuse.com'),
 			recipients = [tester["email"]],
 			html="""
@@ -404,7 +405,7 @@ def reward_customer():
 								</div>
 							</div>
 							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-								Congrats!! You have been rewarded $4.00 for your feedback on a product, """ + product["name"] + """
+								Congrats!! You have been rewarded $""" + str(round(rewardAmount, 2)) + """ for your feedback on a product, """ + product["name"] + """
 								Click below to withdraw your reward
 							</div>
 							<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
@@ -417,15 +418,13 @@ def reward_customer():
 		)
 
 		mail.send(msg)
-
-		query("update product set amount = " + str(round(amount, 2)) + " where id = " + productId)
-		query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
-
-		return { "msg": "" }
 	except:
 		print("")
 
-	return { "status": "failed to send" }, 400
+	query("update product set amount = " + str(round(amount, 2)) + " where id = " + productId)
+	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
+
+	return { "msg": "" }
 
 @app.route("/reject_feedback", methods=["POST"])
 def reject_feedback():
@@ -472,10 +471,10 @@ def reject_feedback():
 		)
 
 		mail.send(msg)
-
-		query("update product_testing set rejectedReason = '" + reason + "' where productId = " + productId + " and testerId = " + testerId)
 	except:
 		print("")
+
+	query("update product_testing set rejectedReason = '" + reason + "' where productId = " + productId + " and testerId = " + testerId)
 
 	return { "msg": "" }
 
