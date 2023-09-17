@@ -7,7 +7,7 @@ from functions import *
 from flask_mail import Mail, Message
 from binascii import a2b_base64
 from time import time, sleep
-import os, json, pytz, datetime
+import os, json, pytz, datetime, requests
 
 app.config['MAIL_SERVER']='smtp.zoho.com'
 app.config['MAIL_PORT'] = 465
@@ -220,36 +220,27 @@ def charge():
 
 @app.route("/send_email")
 def send_email():
-	msg = Message(
-		"A customer gave you a feedback on your product",
-		sender=('Product Feedback', 'admin@geottuse.com'),
-		recipients = ["kmrobogram@gmail.com"],
-		html="""
-			<html>
-				<head>
-					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-					<style>.button:hover { background-color: #000000; color: white; }</style>
-				</head>
-				<body>
-					<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;">
-						<div style='width: 100%;'>
-							<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
-								<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
-							</div>
-						</div>
-						<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-							Yes! Someone just tried your product,  and gave you a feedback
-						</div>
-						<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
-							<a class="button" style="border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;" href="https://www.getproductfeedback.com/feedback">Check it out</a>
-						</div>
-					</div>
-				</body>
-			</html>
-		"""
-	)
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Yes! Someone just tried your product,  and gave you a feedback		</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com/feedback'>Check it out</a>		</div>	</div></body></html>"
 
-	mail.send(msg)
+	payload = """
+		{
+			\"from\": { \"address\": \"admin@geottuse.com\"},
+			\"to\": [
+				{\"email_address\": {\
+					"address\": \"kmrobogram@gmail.com\",
+					\"name\": \"kmrobogram@gmail.com\"
+				}}
+			],
+			\"subject\":\"Product Feedback\",
+			\"htmlbody\":\"""" + html + """\"\n
+		}
+	"""
+	headers = {
+		'accept': "application/json",
+		'content-type': "application/json",
+		'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
+	}
 
-	return { "msg": "" }
+	response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
+
+	return { "msg": response.text }

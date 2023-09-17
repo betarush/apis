@@ -7,7 +7,7 @@ from functions import *
 from flask_mail import Mail, Message
 from binascii import a2b_base64
 from time import time
-import os, json
+import os, json, requests
 
 app.config['MAIL_SERVER']='smtp.zoho.com'
 app.config['MAIL_PORT'] = 465
@@ -83,7 +83,7 @@ def list_product():
 
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
-		query("insert into product (name, image, info, link, creatorId, otherInfo, amount) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ")")
+		query("insert into product (name, image, info, link, creatorId, otherInfo, amountLeftover, amountSpent) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ", " + str(round(launchAmount, 2)) + ")")
 
 		return { "msg": "" }
 
@@ -95,12 +95,11 @@ def relist_product():
 
 	productId = str(content['productId'])
 
-	product = query("select creatorId, otherInfo, amount from product where id = " + productId, True).fetchone()
+	product = query("select creatorId, otherInfo from product where id = " + productId, True).fetchone()
 
 	if product != None:
 		creatorId = str(product["creatorId"])
 		otherInfo = json.loads(product["otherInfo"])
-		amount = int(product["amount"])
 
 		creator = query("select tokens from user where id = " + creatorId, True).fetchone()
 		tokens = json.loads(creator["tokens"])
@@ -142,7 +141,7 @@ def relist_product():
 
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup })
 
-		query("update product set amount = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
+		query("update product set amountLeftover = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
 
 		return { "msg": "" }
 
@@ -157,22 +156,24 @@ def get_untested_products():
 	sql = "select * from product where not creatorId = " + userId
 	sql += " and ("
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
-	sql += ") and amount > 0"
+	sql += " or "
+	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and not rejectedReason = '') > 0"
+	sql += ") and amountLeftover > 0"
 
 	datas = query(sql, True).fetchall()
 
 	for data in datas:
-		amount = float(data["amount"])
+		amount = float(data["amountLeftover"])
 
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]), True).fetchone()
+		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and ((feedback = '' and rejectedReason = ''))", True).fetchone()
 
 		data["trying"] = testing != None
 
-		data["numTried"] = amount / rewardAmount
-		data["reward"] = launchAmount / 5
+		data["numTried"] = amount / (data["amountSpent"] / 5)
+		data["reward"] = data["amountSpent"] / 5
 
 	return { "products": datas }
 
@@ -195,7 +196,7 @@ def get_tested_products():
 
 		data["earned"] = testing["earned"] == True
 		data["gave_feedback"] = testing["feedback"] != ""
-		data["reward"] = launchAmount / 5
+		data["reward"] = data["amountSpent"] / 5
 
 	return { "products": datas }
 
@@ -215,15 +216,19 @@ def get_my_products():
 
 		otherInfo = json.loads(data["otherInfo"])
 		charge = stripe.PaymentIntent.retrieve(otherInfo["charge"])
-		data["amountSpent"] = round(launchAmount, 2)
+		data["amountSpent"] = round(data["amountSpent"], 2)
 
-		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0", True).fetchone()["count(*)"]
-		tested = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchone()["count(*)"]
+		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and (feedback = '' and rejectedReason = '')", True).fetchone()["count(*)"]
+		rejected = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and not rejectedReason = ''", True).fetchone()["count(*)"]
+		filledFeedback = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and not feedback = '' and rejectedReason = ''", True).fetchone()["count(*)"]
+		rewarded = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 1", True).fetchone()["count(*)"]
 
 		data["numTesting"] = testing
-		data["numFeedback"] = tested
-		data["numTested"] = 5 - (int(data["amount"]) / (launchAmount / 5))
-
+		data["numRejected"] = rejected
+		data["numFeedback"] = filledFeedback
+		data["numRewarded"] = rewarded
+		data["numTested"] = 5 - (int(data["amountLeftover"]) / (launchAmount / 5))
+		
 	return { "products": datas }
 
 @app.route("/try_product", methods=["POST"])
@@ -234,50 +239,24 @@ def try_product():
 	productId = str(content['productId'])
 
 	testing = True
-
 	testing = query("select * from product_testing where testerId = " + userId + " and productId = " + productId, True).fetchone()
 
-	if testing == None: # haven't tried yet
+	if testing == None or testing["rejectedReason"] != "": # haven't tried yet
 		product = query("select creatorId, name from product where id = " + productId, True).fetchone()
 		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
-		msg = Message(
-			"A customer is trying out your product",
-			sender=('Product Feedback', 'admin@geottuse.com'),
-			recipients = [creator["email"]],
-			html="""
-				<html>
-					<head>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<style>.button:hover { background-color: #000000; color: white; }</style>
-					</head>
-					<body>
-						<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;">
-							<div style='width: 100%;'>
-								<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
-									<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
-								</div>
-							</div>
-							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-								Yay! Someone is currently using your product, """ + product["name"] + """
-							</div>
-						</div>
-					</body>
-				</html>
-			"""
-		)
+		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Yay! Someone is currently using your product, " + product["name"] + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			</div>	</div></body></html>"
 
-		try:
-			mail.send(msg)
-		except:
-			print("")
+		send_email(creator["email"], "A customer is trying our your product", html)
 
-		query("insert into product_testing (testerId, productId, feedback, earned) values (" + userId + ", " + productId + ", '', 0)")
+		if testing == None:
+			query("insert into product_testing (testerId, productId, feedback, earned, rejectedReason) values (" + userId + ", " + productId + ", '', 0, '')")
+		else:
+			query("update product_testing set feedback = '', rejectedReason = '' where id = " + str(testing["id"]))
 
 		return { "msg": "" }
 
-	return { "status": "failed to send" }, 400
+	return { "status": "nonExist" }, 400
 
 @app.route("/get_feedbacks", methods=["POST"])
 def get_feedbacks():
@@ -285,11 +264,11 @@ def get_feedbacks():
 
 	userId = str(content['userId'])
 
-	datas = query("select * from product where creatorId = " + userId + " and id in (select productId from product_testing where not feedback = '' and earned = 0)", True).fetchall()
+	datas = query("select * from product where creatorId = " + userId + " and id in (select productId from product_testing where not feedback = '' and earned = 0 and rejectedReason = '')", True).fetchall()
 	products = []
 
 	for data in datas:
-		feedbacks = query("select id, feedback, testerId from product_testing where productId = " + str(data["id"]) + " and not feedback = '' and earned = 0", True).fetchall()
+		feedbacks = query("select id, feedback, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
 
 		for info in feedbacks:
 			info["key"] = "feedback-" + str(data["id"]) + "-" + str(info["id"])
@@ -311,7 +290,7 @@ def get_product_feedbacks():
 
 	productId = str(content['productId'])
 
-	feedbacks = query("select id, feedback, testerId from product_testing where productId = " + productId + " and earned = 0", True).fetchall()
+	feedbacks = query("select id, feedback, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
 	product = query("select name, image from product where id = " + productId, True).fetchone()
 
 	for info in feedbacks:

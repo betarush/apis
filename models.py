@@ -44,16 +44,18 @@ class Product(db.Model):
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
 	otherInfo = db.Column(db.String(85), unique=True)
-	amount = db.Column(db.Float)
+	amountLeftover = db.Column(db.Float)
+	amountSpent = db.Column(db.Float)
 
-	def __init__(self, name, image, info, link, creatorId, otherInfo, amount):
+	def __init__(self, name, image, info, link, creatorId, otherInfo, amountLeftover, amountSpent):
 		self.name = name
 		self.image = image
 		self.info = info
 		self.link = link
 		self.creatorId = creatorId
 		self.otherInfo = otherInfo
-		self.amount = amount
+		self.amountLeftover = amountLeftover
+		self.amountSpent = amountSpent
 
 class ProductTesting(db.Model):
 	id = db.Column(db.Integer, primary_key=True)

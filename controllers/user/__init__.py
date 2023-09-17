@@ -5,6 +5,7 @@ from config import *
 from models import *
 from functions import *
 from flask_mail import Mail, Message
+import os, requests
 
 app.config['MAIL_SERVER']='smtp.zoho.com'
 app.config['MAIL_PORT'] = 465
@@ -67,37 +68,9 @@ def verify():
 	for n in range(4):
 		verifyCode += str(randint(0, 9))
 
-	msg = Message(
-		"Feedback Verification Code",
-		sender=('Product Feedback', 'admin@geottuse.com'),
-		recipients = [email],
-		html="""
-			<html>
-				<head>
-					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-					<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-					<style>.button:hover { background-color: #000000; color: white; }</style>
-				</head>
-				<body>
-					<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;">
-						<div style='width: 100%;'>
-							<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
-								<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
-							</div>
-						</div>
-						<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-							Your verification code is """ + verifyCode + """
-						</div>
-					</div>
-				</body>
-			</html>
-		"""
-	)
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Your verification code is " + verifyCode + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			</div>	</div></body></html>"
 
-	try:
-		mail.send(msg)
-	except:
-		print("")
+	send_email(email, "Feedback Verification Code", html)
 
 	return { "verifycode": verifyCode }
 
@@ -128,16 +101,21 @@ def get_user_info():
 		else:
 			account = False
 
-		earnings = query("select count(*) as num from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["num"]
+		earnings = query("select productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
 		rejectedReasons = query("select count(*) as num from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchone()["num"]
+		amountEarned = 0.0
+
+		for info in earnings:
+			product = query("select amountSpent from product where id = " + str(info["productId"]), True).fetchone()
+
+			amountEarned += (product["amountSpent"] / 5)
 
 		return {
 			"username": username,
-			"earnings": round(earnings * (launchAmount / 5), 2),
+			"earnings": round(amountEarned, 2),
 			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
-			"bankaccountDone": account,
-			"rewardAmount": rewardAmount
+			"bankaccountDone": account
 		}
 
 	return { "status": "nonExist" }, 400
@@ -304,10 +282,10 @@ def get_earnings():
 	pendingEarned = 0.0
 
 	for info in earnings:
-		product = query("select name, otherInfo from product where id = " + str(info["productId"]), True).fetchone()
+		product = query("select name, otherInfo, amountSpent from product where id = " + str(info["productId"]), True).fetchone()
 		otherInfo = json.loads(product["otherInfo"])
 		transferGroup = otherInfo["transferGroup"]
-		amount = launchAmount / 5
+		amount = product["amountSpent"] / 5
 
 		transferAmount = int(amount * 100)
 		balance = get_balance()
@@ -381,47 +359,17 @@ def reward_customer():
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
 
-	product = query("select name, amount from product where id = " + productId, True).fetchone()
-	amount = float(product["amount"]) - (launchAmount / 5)
+	product = query("select name, amountLeftover, amountSpent from product where id = " + productId, True).fetchone()
+	amount = float(product["amountLeftover"]) - (product["amountSpent"] / 5)
 	tester = query("select email from user where id = " + testerId, True).fetchone()
 
-	try:
-		msg = Message(
-			"Wow, You have been rewarded $" + str(round(rewardAmount, 2)),
-			sender=('Product Feedback', 'admin@geottuse.com'),
-			recipients = [tester["email"]],
-			html="""
-				<html>
-					<head>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<style>.button:hover { background-color: #000000; color: white; }</style>
-					</head>
-					<body>
-						<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;">
-							<div style='width: 100%;'>
-								<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
-									<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
-								</div>
-							</div>
-							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-								Congrats!! You have been rewarded $""" + str(round(rewardAmount, 2)) + """ for your feedback on a product, """ + product["name"] + """
-								Click below to withdraw your reward
-							</div>
-							<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
-								<a class="button" style="border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;" href="https://www.getproductfeedback.com/earnings">Get your reward</a>
-							</div>
-						</div>
-					</body>
-				</html>
-			"""
-		)
+	rewardAmount = product["amountSpent"] / 5
 
-		mail.send(msg)
-	except:
-		print("")
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Congrats!! You have been rewarded $" + str(round(rewardAmount, 2)) + " for your feedback on a product, " + product["name"] + "<br/><br/>Click below to withdraw your reward</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com/earnings'>Get your reward</a>		</div>	</div></body></html>"
 
-	query("update product set amount = " + str(round(amount, 2)) + " where id = " + productId)
+	send_email(tester["email"], "Wow, You have been rewarded $" + str(round(rewardAmount, 2)), html)
+
+	query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + productId)
 	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
 
 	return { "msg": "" }
@@ -436,43 +384,9 @@ def reject_feedback():
 
 	tester = query("select email from user where id = " + testerId, True).fetchone()
 
-	try:
-		msg = Message(
-			"Sorry, one of your feedback has been rejected",
-			sender=('Product Feedback', 'admin@geottuse.com'),
-			recipients = [tester["email"]],
-			html="""
-				<html>
-					<head>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap" rel="stylesheet"/>
-						<style>.button:hover { background-color: #000000; color: white; }</style>
-					</head>
-					<body>
-						<div style="background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;">
-							<div style='width: 100%;'>
-								<div style="height: 10vw; margin: 10px auto 0 auto; width: 10vw;">
-									<img style="height: 100%; width: 100%;" src="http://www.getproductfeedback.com/favicon.ico"/>
-								</div>
-							</div>
-							<div style="color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;">
-								Your feedback was rejected
-								""" 
-								+ (" with a reason: " + str(reason) if str(reason) != "" else "") + 
-								"""
-							</div>
-							<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>
-								<a class="button" style="border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;" href="https://www.getproductfeedback.com/rejections">See the rejection</a>
-							</div>
-						</div>
-					</body>
-				</html>
-			"""
-		)
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Your feedback was rejected" + (" with a reason: " + str(reason) if str(reason) != "" else "") + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com/rejections'>See the rejection</a>		</div>	</div></body></html>"
 
-		mail.send(msg)
-	except:
-		print("")
+	send_email(tester["email"], "Sorry, one of your feedback has been rejected", html)
 
 	query("update product_testing set rejectedReason = '" + reason + "' where productId = " + productId + " and testerId = " + testerId)
 

@@ -2,17 +2,13 @@ import pymysql.cursors, os, json
 from random import randint
 from time import time
 from config import *
-import stripe
+import stripe, requests
 
 stripe.api_key = "sk_test_51NmA1PFqjgkiO0WHxOmFjOzgwHorLyTxjyWJ926HiBK10KHnTnh7q8skEmQ5c0NpHxI3mk2fbejMASjazhPlmGkv00L98uIq8G"
 
 photoUrl = os.getenv("PHOTO_URL")
-# launchAmount = 20.00
-# appFee = 8
-
-launchAmount = 10.00
+launchAmount = 20.00
 appFee = 5
-rewardAmount = 10 / 5
 
 def query(sql, output = False):
 	db_host = str(os.getenv("DB_HOST"))
@@ -67,3 +63,31 @@ def get_balance():
 	info = stripe.Balance.retrieve()
 
 	return info.available[0].amount
+
+def send_email(receiver, subject, html):
+	try:
+		payload = """
+			{
+				\"from\": { \"address\": \"admin@geottuse.com\"},
+				\"to\": [
+					{\"email_address\": {\
+						"address\": \"""" + receiver + """\",
+						\"name\": \"""" + subject + """\"
+					}}
+				],
+				\"subject\":\"Product Feedback\",
+				\"htmlbody\":\"""" + html + """\"\n
+			}
+		"""
+
+		headers = {
+			'accept': "application/json",
+			'content-type': "application/json",
+			'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
+		}
+
+		response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
+
+		print(response.text)
+	except Exception as error:
+		print("error sending email", error)
