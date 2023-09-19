@@ -27,14 +27,16 @@ class User(db.Model):
 	earnings = db.Column(db.Float())
 	bankaccountInfo = db.Column(db.String(220))
 	tokens = db.Column(db.String(75), unique=True)
+	firstTime = db.Column(db.Boolean)
 
-	def __init__(self, email, password, username, earnings, bankaccountInfo, tokens):
+	def __init__(self, email, password, username, earnings, bankaccountInfo, tokens, firstTime):
 		self.email = email
 		self.password = password
 		self.username = username
 		self.earnings = earnings
 		self.bankaccountInfo = bankaccountInfo
 		self.tokens = tokens
+		self.firstTime = firstTime
 
 class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
@@ -77,10 +79,12 @@ class PendingPayout(db.Model):
 	accountId = db.Column(db.String(25))
 	transferGroup = db.Column(db.String(25))
 	amount = db.Column(db.Integer)
+	email = db.Column(db.String(50))
 	created = db.Column(db.Integer)
 
-	def __init__(self, accountId, transferGroup, amount, created):
+	def __init__(self, accountId, transferGroup, amount, email, created):
 		self.accountId = accountId
 		self.transferGroup = transferGroup
 		self.amount = amount
+		self.email = email
 		self.created = created

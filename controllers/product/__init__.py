@@ -40,7 +40,7 @@ def list_product():
 	fd.write(data)
 	fd.close()
 
-	user = query("select tokens from user where id = " + userId, True).fetchone()
+	user = query("select tokens, firstTime from user where id = " + userId, True).fetchone()
 
 	if user != None:
 		image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
@@ -73,17 +73,20 @@ def list_product():
 		payoutAmount = int((amount - launchAmount) * 100)
 		balance = get_balance()
 
-		if balance >= payoutAmount:
-			stripe.Payout.create(
-				amount=payoutAmount,
-				currency="cad"
-			)
-		else:
-			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('', '', " + str(payoutAmount) + ", " + str(time()) + ")")
+		# if balance >= payoutAmount:
+		# 	stripe.Payout.create(
+		# 		amount=payoutAmount,
+		# 		currency="cad"
+		# 	)
+		# else:
+		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
 
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
 		query("insert into product (name, image, info, link, creatorId, otherInfo, amountLeftover, amountSpent) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ", " + str(round(launchAmount, 2)) + ")")
+
+		if user["firstTime"] == True:
+			query("update user set firstTime = 0 where id = " + userId)
 
 		return { "msg": "" }
 
@@ -131,13 +134,13 @@ def relist_product():
 		payoutAmount = int((amount - launchAmount) * 100)
 		balance = get_balance()
 
-		if balance >= payoutAmount:
-			stripe.Payout.create(
-				amount=payoutAmount,
-				currency="cad"
-			)
-		else:
-			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('', '', " + str(payoutAmount) + ", " + str(time()) + ")")
+		# if balance >= payoutAmount:
+		# 	stripe.Payout.create(
+		# 		amount=payoutAmount,
+		# 		currency="cad"
+		# 	)
+		# else:
+		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
 
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup })
 
@@ -177,8 +180,8 @@ def get_untested_products():
 
 	return { "products": datas }
 
-@app.route("/get_tested_products", methods=["POST"])
-def get_tested_products():
+@app.route("/get_testing_products", methods=["POST"])
+def get_testing_products():
 	content = request.get_json()
 
 	userId = str(content['userId'])
@@ -245,7 +248,14 @@ def try_product():
 		product = query("select creatorId, name from product where id = " + productId, True).fetchone()
 		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
-		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Yay! Someone is currently using your product, " + product["name"] + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			</div>	</div></body></html>"
+		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
+		html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
+		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+		html += "Yay! Someone is currently using your product, " + product["name"]
+		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+		html += "</div>	</div></body></html>"
 
 		send_email(creator["email"], "A customer is trying our your product", html)
 

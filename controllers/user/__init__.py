@@ -38,7 +38,7 @@ def register():
 
 	tokens = json.dumps({ "creator": creator.id, "account": "" })
 
-	userId = query("insert into user (email, password, username, earnings, bankaccountInfo, tokens) values ('" + email + "', '" + generate_password_hash(password) + "', '" + username + "', 0.0, '" + bankaccountInfo + "', '" + tokens + "')", True).lastrowid
+	userId = query("insert into user (email, password, username, earnings, bankaccountInfo, tokens, firstTime) values ('" + email + "', '" + generate_password_hash(password) + "', '" + username + "', 0.0, '" + bankaccountInfo + "', '" + tokens + "', 1)", True).lastrowid
 
 	return { "id": userId }
 
@@ -63,16 +63,28 @@ def verify():
 
 	email = content['email']
 
-	verifyCode = ""
+	user = query("select id from user where email = '" + email + "'", True).fetchone()
 
-	for n in range(4):
-		verifyCode += str(randint(0, 9))
+	if user == None:
+		verifyCode = ""
 
-	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Your verification code is " + verifyCode + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			</div>	</div></body></html>"
+		for n in range(4):
+			verifyCode += str(randint(0, 9))
 
-	send_email(email, "Feedback Verification Code", html)
+		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
+		html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
+		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+		html += "Your verification code is " + verifyCode
+		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+		html += "</div>	</div></body></html>"
 
-	return { "verifycode": verifyCode }
+		send_email(email, "Feedback Verification Code", html)
+
+		return { "verifycode": verifyCode }
+
+	return { "status": "exist" }, 400
 
 @app.route("/get_user_info", methods=["POST"])
 def get_user_info():
@@ -80,7 +92,7 @@ def get_user_info():
 
 	userId = str(content['userId'])
 
-	user = query("select email, tokens from user where id = " + userId, True).fetchone()
+	user = query("select email, tokens, firstTime from user where id = " + userId, True).fetchone()
 
 	if user != None:
 		username = user["email"].split("@")[0]
@@ -110,15 +122,29 @@ def get_user_info():
 
 			amountEarned += (product["amountSpent"] / 5)
 
+		numCreatedProducts = query("select count(*) as num from product where creatorId = " + userId, True).fetchone()["num"]
+
 		return {
 			"username": username,
 			"earnings": round(amountEarned, 2),
 			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
-			"bankaccountDone": account
+			"bankaccountDone": account,
+			"firstTime": user["firstTime"],
+			"isCreator": numCreatedProducts > 0
 		}
 
 	return { "status": "nonExist" }, 400
+
+@app.route("/update_first_time", methods=["POST"])
+def update_first_time():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	query("update user set firstTime = 0 where id = " + userId)
+
+	return { "msg": "" }
 
 @app.route("/get_payment_info", methods=["POST"])
 def get_payment_info():
@@ -131,14 +157,14 @@ def get_payment_info():
 	if user != None:
 		tokens = json.loads(user["tokens"])
 
-		customer = stripe.Customer.retrieve(tokens["creator"])
+		methods = stripe.PaymentMethod.list(
+		  customer=tokens["creator"],
+		  type="card",
+		)
 		card = None
 
-		if customer.default_source != None:
-			card = stripe.Customer.retrieve_source(
-				tokens["creator"],
-				customer.default_source
-			)
+		if len(methods.data) > 0:
+			card = methods.data[0].card
 			card = {
 				"name": card.brand,
 				"last4": card.last4
@@ -274,7 +300,7 @@ def get_earnings():
 
 	userId = str(content['userId'])
 
-	tester = query("select email, tokens from user where id = " + userId, True).fetchone()
+	tester = query("select id, email, tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(tester["tokens"])
 
 	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
@@ -292,18 +318,18 @@ def get_earnings():
 
 		earnedAmount += amount
 
-		if balance >= transferAmount:
-			stripe.Transfer.create(
-				amount=transferAmount,
-				currency="cad",
-				description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
-				destination=tokens["account"],
-				transfer_group=transferGroup
-			)
-		else:
-			query("insert into pending_payout (accountId, transferGroup, amount, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", " + str(time()) + ")")
+		# if balance >= transferAmount:
+		# 	stripe.Transfer.create(
+		# 		amount=transferAmount,
+		# 		currency="cad",
+		# 		description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
+		# 		destination=tokens["account"],
+		# 		transfer_group=transferGroup
+		# 	)
+		# else:
+		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
 
-			pendingEarned += amount
+		pendingEarned += amount
 
 		query("delete from product_testing where id = " + str(info["id"]))
 
@@ -317,6 +343,7 @@ def create_checkout():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	redirect = str(content['redirect'])
 
 	user = query("select tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(user["tokens"])
@@ -325,8 +352,8 @@ def create_checkout():
 	  payment_method_types=['card'],
 	  mode='setup',
 	  customer=tokens["creator"],
-	  success_url=os.getenv("CLIENT_URL") + '/listproduct?session_id={CHECKOUT_SESSION_ID}',
-	  cancel_url=os.getenv("CLIENT_URL") + '/listproduct',
+	  success_url=os.getenv("CLIENT_URL") + '/' + redirect + '?session_id={CHECKOUT_SESSION_ID}',
+	  cancel_url=os.getenv("CLIENT_URL") + '/' + redirect,
 	)
 
 	return { "url": session.url }
@@ -365,7 +392,17 @@ def reward_customer():
 
 	rewardAmount = product["amountSpent"] / 5
 
-	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Congrats!! You have been rewarded $" + str(round(rewardAmount, 2)) + " for your feedback on a product, " + product["name"] + "<br/><br/>Click below to withdraw your reward</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com/earnings'>Get your reward</a>		</div>	</div></body></html>"
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
+	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
+	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+	html += "Congrats!! You have been rewarded $" + str(round(rewardAmount, 2)) + " for your feedback on a product, " + product["name"]
+	html += "<br/><br/>Click below to withdraw your reward"
+	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
+	html += "/earnings'>Get your reward"
+	html += "</a>		</div>	</div></body></html>"
 
 	send_email(tester["email"], "Wow, You have been rewarded $" + str(round(rewardAmount, 2)), html)
 
@@ -384,7 +421,16 @@ def reject_feedback():
 
 	tester = query("select email from user where id = " + testerId, True).fetchone()
 
-	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			Your feedback was rejected" + (" with a reason: " + str(reason) if str(reason) != "" else "") + "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com/rejections'>See the rejection</a>		</div>	</div></body></html>"
+	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
+	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
+	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+	html += "Your feedback was rejected" + (" with a reason: " + str(reason) if str(reason) != "" else "")
+	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
+	html += "/rejections'>See the rejection"
+	html += "</a>		</div>	</div></body></html>"
 
 	send_email(tester["email"], "Sorry, one of your feedback has been rejected", html)
 
