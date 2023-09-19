@@ -4,11 +4,12 @@ from time import time
 from config import *
 import stripe, requests
 
-stripe.api_key = "sk_test_51NmA1PFqjgkiO0WHxOmFjOzgwHorLyTxjyWJ926HiBK10KHnTnh7q8skEmQ5c0NpHxI3mk2fbejMASjazhPlmGkv00L98uIq8G"
+stripe.api_key = os.getenv("STRIPE_KEY")
 
 photoUrl = os.getenv("PHOTO_URL")
 launchAmount = 20.00
 appFee = 5
+pending = False
 
 # html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 # html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
@@ -77,29 +78,28 @@ def get_balance():
 
 def send_email(receiver, subject, html):
 	try:
-		# payload = """
-		# 	{
-		# 		\"from\": { \"address\": \"admin@geottuse.com\"},
-		# 		\"to\": [
-		# 			{\"email_address\": {\
-		# 				"address\": \"""" + receiver + """\",
-		# 				\"name\": \"""" + subject + """\"
-		# 			}}
-		# 		],
-		# 		\"subject\":\"Product Feedback\",
-		# 		\"htmlbody\":\"""" + html + """\"\n
-		# 	}
-		# """
+		payload = """
+			{
+				\"from\": { \"address\": \"admin@geottuse.com\"},
+				\"to\": [
+					{\"email_address\": {\
+						"address\": \"""" + receiver + """\",
+						\"name\": \"""" + subject + """\"
+					}}
+				],
+				\"subject\":\"Product Feedback\",
+				\"htmlbody\":\"""" + html + """\"\n
+			}
+		"""
 
-		# headers = {
-		# 	'accept': "application/json",
-		# 	'content-type': "application/json",
-		# 	'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
-		# }
+		headers = {
+			'accept': "application/json",
+			'content-type': "application/json",
+			'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
+		}
 
-		# response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
+		response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
 
-		# print(response.text)
-		print("sent limited")
+		print(response.text)
 	except Exception as error:
 		print("error sending email", error)

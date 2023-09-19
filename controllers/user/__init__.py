@@ -54,6 +54,8 @@ def login():
 	if customer != None:
 		if check_password_hash(customer["password"], password):
 			return { "id": customer["id"] }
+		else:
+			return { "status": "passwordWrong" }, 400
 
 	return { "status": "noExist" }, 400
 
@@ -318,18 +320,18 @@ def get_earnings():
 
 		earnedAmount += amount
 
-		# if balance >= transferAmount:
-		# 	stripe.Transfer.create(
-		# 		amount=transferAmount,
-		# 		currency="cad",
-		# 		description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
-		# 		destination=tokens["account"],
-		# 		transfer_group=transferGroup
-		# 	)
-		# else:
-		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
+		if balance >= transferAmount and pending == False:
+			stripe.Transfer.create(
+				amount=transferAmount,
+				currency="cad",
+				description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
+				destination=tokens["account"],
+				transfer_group=transferGroup
+			)
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
 
-		pendingEarned += amount
+			pendingEarned += amount
 
 		query("delete from product_testing where id = " + str(info["id"]))
 

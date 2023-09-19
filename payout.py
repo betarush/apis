@@ -53,7 +53,7 @@ with app.app_context():
 							html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
 							html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
 							html += "'>Try more products and earn more</a>		</div>	</div></body></html>"
-
+							
 							print("Rewarded $" + str(amount / 100) + " to tester")
 						else:
 							stripe.Payout.create(
@@ -80,3 +80,6 @@ with app.app_context():
 		sleep(3)
 
 	print("DONE")
+
+# get process id: ps -ef | grep python
+# start autopayout: nohup python payout.py &

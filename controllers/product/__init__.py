@@ -73,13 +73,13 @@ def list_product():
 		payoutAmount = int((amount - launchAmount) * 100)
 		balance = get_balance()
 
-		# if balance >= payoutAmount:
-		# 	stripe.Payout.create(
-		# 		amount=payoutAmount,
-		# 		currency="cad"
-		# 	)
-		# else:
-		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
+		if balance >= payoutAmount and pending == False:
+			stripe.Payout.create(
+				amount=payoutAmount,
+				currency="cad"
+			)
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
 
 		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
