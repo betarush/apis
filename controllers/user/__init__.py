@@ -49,15 +49,15 @@ def login():
 	email = content['email']
 	password = content['password']
 
-	customer = query("select id, password from user where email = '" + email + "'", True).fetchone()
+	user = query("select id, password from user where email = '" + email + "'", True).fetchone()
 
-	if customer != None:
-		if check_password_hash(customer["password"], password):
-			return { "id": customer["id"] }
+	if user != None:
+		if check_password_hash(user["password"], password):
+			return { "id": user["id"] }
 		else:
 			return { "status": "passwordWrong" }, 400
 
-	return { "status": "noExist" }, 400
+	return { "status": "nonExist" }, 400
 
 @app.route("/verify", methods=["POST"])
 def verify():

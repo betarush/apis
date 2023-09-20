@@ -40,9 +40,9 @@ class User(db.Model):
 
 class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
-	name = db.Column(db.String(20))
+	name = db.Column(db.String(100))
 	image = db.Column(db.String(75))
-	info = db.Column(db.String(100))
+	info = db.Column(db.String(250))
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
 	otherInfo = db.Column(db.String(85), unique=True)
