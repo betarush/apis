@@ -155,13 +155,14 @@ def get_untested_products():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
 	sql += " and ("
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
 	sql += " or "
 	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and not rejectedReason = '') > 0"
-	sql += ") and amountLeftover > 0"
+	sql += ") and amountLeftover > 0 limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -175,19 +176,20 @@ def get_untested_products():
 
 		data["trying"] = testing != None
 
-		data["numTried"] = amount / (data["amountSpent"] / 5)
+		data["numLeftover"] = 5 - ((data["amountSpent"] - data["amountLeftover"]) / (data["amountSpent"] / 5))
 		data["reward"] = data["amountSpent"] / 5
 
-	return { "products": datas }
+	return { "products": datas, "offset": len(datas) + offset }
 
 @app.route("/get_testing_products", methods=["POST"])
 def get_testing_products():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0"
+	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0 limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -201,15 +203,23 @@ def get_testing_products():
 		data["gave_feedback"] = testing["feedback"] != ""
 		data["reward"] = data["amountSpent"] / 5
 
-	return { "products": datas }
+	return { "products": datas, "offset": len(datas) + offset }
 
 @app.route("/get_my_products", methods=["POST"])
 def get_my_products():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	offset = content['offset']
 
-	sql = "select * from product where creatorId = " + userId
+	sql = "select *, "
+
+	# testing
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and (feedback = '' and rejectedReason = '')) as numTesting, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not rejectedReason = '') as numRejected, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not feedback = '' and rejectedReason = '') as numFeedback, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 1) as rewarded "
+	sql += "from product where creatorId = " + userId + " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -220,19 +230,9 @@ def get_my_products():
 		otherInfo = json.loads(data["otherInfo"])
 		charge = stripe.PaymentIntent.retrieve(otherInfo["charge"])
 		data["amountSpent"] = round(data["amountSpent"], 2)
-
-		testing = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and (feedback = '' and rejectedReason = '')", True).fetchone()["count(*)"]
-		rejected = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and not rejectedReason = ''", True).fetchone()["count(*)"]
-		filledFeedback = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 0 and not feedback = '' and rejectedReason = ''", True).fetchone()["count(*)"]
-		rewarded = query("select count(*) from product_testing where productId = " + str(data["id"]) + " and earned = 1", True).fetchone()["count(*)"]
-
-		data["numTesting"] = testing
-		data["numRejected"] = rejected
-		data["numFeedback"] = filledFeedback
-		data["numRewarded"] = rewarded
-		data["numTested"] = 5 - (int(data["amountLeftover"]) / (launchAmount / 5))
+		data["numLeftover"] = 5 - ((data["amountSpent"] - data["amountLeftover"]) / (data["amountSpent"] / 5))
 		
-	return { "products": datas }
+	return { "products": datas, "offset": len(datas) + offset }
 
 @app.route("/try_product", methods=["POST"])
 def try_product():
@@ -273,8 +273,13 @@ def get_feedbacks():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	offset = content['offset']
 
-	datas = query("select * from product where creatorId = " + userId + " and id in (select productId from product_testing where not feedback = '' and earned = 0 and rejectedReason = '')", True).fetchall()
+	sql = "select * from product where creatorId = " + userId
+	sql += " and id in (select productId from product_testing where not feedback = '' and earned = 0 and rejectedReason = '')"
+	sql += " limit " + str(offset) + ", 10"
+
+	datas = query(sql, True).fetchall()
 	products = []
 
 	for data in datas:
@@ -292,7 +297,7 @@ def get_feedbacks():
 			"feedbacks": feedbacks
 		})
 
-	return { "products": products }
+	return { "products": products, "offset": len(datas) + offset }
 
 @app.route("/get_product_feedbacks", methods=["POST"])
 def get_product_feedbacks():
@@ -309,6 +314,8 @@ def get_product_feedbacks():
 
 		del info["feedback"]
 
-	return { "feedbacks": feedbacks, "name": product["name"], "logo": json.loads(product["image"] )}
-
-
+	return { 
+		"feedbacks": feedbacks, 
+		"name": product["name"], 
+		"logo": json.loads(product["image"])
+	}

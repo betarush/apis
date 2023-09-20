@@ -78,28 +78,29 @@ def get_balance():
 
 def send_email(receiver, subject, html):
 	try:
-		payload = """
-			{
-				\"from\": { \"address\": \"admin@geottuse.com\"},
-				\"to\": [
-					{\"email_address\": {\
-						"address\": \"""" + receiver + """\",
-						\"name\": \"""" + subject + """\"
-					}}
-				],
-				\"subject\":\"Product Feedback\",
-				\"htmlbody\":\"""" + html + """\"\n
-			}
-		"""
+		# payload = """
+		# 	{
+		# 		\"from\": { \"address\": \"admin@geottuse.com\"},
+		# 		\"to\": [
+		# 			{\"email_address\": {\
+		# 				"address\": \"""" + receiver + """\",
+		# 				\"name\": \"""" + subject + """\"
+		# 			}}
+		# 		],
+		# 		\"subject\":\"Product Feedback\",
+		# 		\"htmlbody\":\"""" + html + """\"\n
+		# 	}
+		# """
 
-		headers = {
-			'accept': "application/json",
-			'content-type': "application/json",
-			'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
-		}
+		# headers = {
+		# 	'accept': "application/json",
+		# 	'content-type': "application/json",
+		# 	'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
+		# }
 
-		response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
+		# response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
 
-		print(response.text)
+		# print(response.text)
+		print("")
 	except Exception as error:
 		print("error sending email", error)

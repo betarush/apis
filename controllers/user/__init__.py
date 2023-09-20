@@ -115,20 +115,17 @@ def get_user_info():
 		else:
 			account = False
 
-		earnings = query("select productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
 		rejectedReasons = query("select count(*) as num from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchone()["num"]
-		amountEarned = 0.0
-
-		for info in earnings:
-			product = query("select amountSpent from product where id = " + str(info["productId"]), True).fetchone()
-
-			amountEarned += (product["amountSpent"] / 5)
-
 		numCreatedProducts = query("select count(*) as num from product where creatorId = " + userId, True).fetchone()["num"]
+		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where earned = 1 and testerId = " + userId + ")", True).fetchone()
+		earnings = 0
+
+		if amountEarned["earnings"] != None:
+			earnings = round(amountEarned["earnings"], 2)
 
 		return {
 			"username": username,
-			"earnings": round(amountEarned, 2),
+			"earnings": earnings,
 			"rejectedReasons": rejectedReasons,
 			"paymentDone": paymentMethod,
 			"bankaccountDone": account,
@@ -305,7 +302,7 @@ def get_earnings():
 	tester = query("select id, email, tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(tester["tokens"])
 
-	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1", True).fetchall()
+	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1 limit 5", True).fetchall()
 	earnedAmount = 0.0
 	pendingEarned = 0.0
 
@@ -317,7 +314,6 @@ def get_earnings():
 
 		transferAmount = int(amount * 100)
 		balance = get_balance()
-
 		earnedAmount += amount
 
 		if balance >= transferAmount and pending == False:
@@ -335,9 +331,12 @@ def get_earnings():
 
 		query("delete from product_testing where id = " + str(info["id"]))
 
+	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["num"]
+
 	return { 
 		"earnedAmount": earnedAmount,
-		"pendingEarned": pendingEarned > 0
+		"pendingEarned": pendingEarned > 0,
+		"leftover": numLeftover > 0
 	}
 
 @app.route("/create_checkout", methods=["POST"])
