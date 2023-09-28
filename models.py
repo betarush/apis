@@ -40,9 +40,9 @@ class User(db.Model):
 
 class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
-	name = db.Column(db.String(100))
+	name = db.Column(db.String(50))
 	image = db.Column(db.String(75))
-	info = db.Column(db.String(250))
+	info = db.Column(db.String(100))
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
 	otherInfo = db.Column(db.String(85), unique=True)
@@ -63,7 +63,7 @@ class ProductTesting(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	testerId = db.Column(db.Integer)
 	productId = db.Column(db.Integer)
-	feedback = db.Column(db.String(100))
+	feedback = db.Column(db.String(500))
 	earned = db.Column(db.Boolean)
 	rejectedReason = db.Column(db.String(200))
 
