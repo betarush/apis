@@ -11,17 +11,6 @@ launchAmount = 20.00
 appFee = 5
 pending = False
 
-# html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-# html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
-# html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-# html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
-# html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
-
-# html += "Yes! You have received your earnings in your bank account.<br/><br/>Thank you for your contribution"
-# html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-# html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
-# html += "'>Try more products and earn more</a>		</div>	</div></body></html>"
-
 def query(sql, output = False):
 	db_host = str(os.getenv("DB_HOST"))
 	user = str(os.getenv("USER"))
@@ -78,29 +67,28 @@ def get_balance():
 
 def send_email(receiver, subject, html):
 	try:
-		# payload = """
-		# 	{
-		# 		\"from\": { \"address\": \"admin@geottuse.com\"},
-		# 		\"to\": [
-		# 			{\"email_address\": {\
-		# 				"address\": \"""" + receiver + """\",
-		# 				\"name\": \"""" + subject + """\"
-		# 			}}
-		# 		],
-		# 		\"subject\":\"Product Feedback\",
-		# 		\"htmlbody\":\"""" + html + """\"\n
-		# 	}
-		# """
+		payload = """
+			{
+				\"from\": { \"address\": \"admin@geottuse.com\"},
+				\"to\": [
+					{\"email_address\": {\
+						"address\": \"""" + receiver + """\",
+						\"name\": \"""" + subject + """\"
+					}}
+				],
+				\"subject\":\"Product Feedback\",
+				\"htmlbody\":\"""" + html + """\"\n
+			}
+		"""
 
-		# headers = {
-		# 	'accept': "application/json",
-		# 	'content-type': "application/json",
-		# 	'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
-		# }
+		headers = {
+			'accept': "application/json",
+			'content-type': "application/json",
+			'authorization': "Zoho-enczapikey wSsVR60jrx70XKwszmWqIOo5m15RA1+gRhh8igby6SX7Ta2U8Mc8khfHB1CnSvIZGWRuRmdAorp6zh4F2zEI2oslmVoDASiF9mqRe1U4J3x17qnvhDzKXm1fmhOPLY0BwQ9sm2dlFMgk+g==",
+		}
 
-		# response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
+		response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
 
-		# print(response.text)
-		print("")
+		print(response.text)
 	except Exception as error:
 		print("error sending email", error)

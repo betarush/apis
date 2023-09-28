@@ -49,11 +49,11 @@ def login():
 	email = content['email']
 	password = content['password']
 
-	user = query("select id, password from user where email = '" + email + "'", True).fetchone()
+	user = query("select id, password, firstTime from user where email = '" + email + "'", True).fetchone()
 
 	if user != None:
 		if check_password_hash(user["password"], password):
-			return { "id": user["id"] }
+			return { "id": user["id"], "firstTime": user["firstTime"] }
 		else:
 			return { "status": "passwordWrong" }, 400
 
@@ -73,11 +73,12 @@ def verify():
 		for n in range(4):
 			verifyCode += str(randint(0, 9))
 
+		# email sent properly
 		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
-		html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
-		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>GET PRODUCT FEEDBACK</h3>		</div>		"
+		html += "<div style='color: black; font-size: 25px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 		html += "Your verification code is " + verifyCode
 		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
 		html += "</div>	</div></body></html>"
@@ -393,19 +394,19 @@ def reward_customer():
 
 	rewardAmount = product["amountSpent"] / 5
 
+	# email sent properly
 	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
-	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
+	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 400px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>GET PRODUCT FEEDBACK</h3>		</div>		"
 	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
-	html += "Congrats!! You have been rewarded $" + str(round(rewardAmount, 2)) + " for your feedback on a product, " + product["name"]
-	html += "<br/><br/>Click below to withdraw your reward"
+	html += "Congrats!! You have been rewarded $" + str(format(rewardAmount, ".2f")) + " for your feedback on a product, " + product["name"]
 	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
+	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
 	html += "/earnings'>Get your reward"
 	html += "</a>		</div>	</div></body></html>"
 
-	send_email(tester["email"], "Wow, You have been rewarded $" + str(round(rewardAmount, 2)), html)
+	send_email(tester["email"], "Wow, You have been rewarded $" + str(format(rewardAmount, ".2f")), html)
 
 	query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + productId)
 	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
