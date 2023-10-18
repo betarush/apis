@@ -189,7 +189,7 @@ def get_testing_products():
 	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0 limit " + str(offset) + ", 10"
+	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + " and rejectedReason = '') > 0 limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
