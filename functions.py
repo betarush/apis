@@ -76,7 +76,7 @@ def send_email(receiver, subject, html):
 						\"name\": \"""" + subject + """\"
 					}}
 				],
-				\"subject\":\"Product Feedback\",
+				\"subject\":\"Waver\",
 				\"htmlbody\":\"""" + html + """\"\n
 			}
 		"""

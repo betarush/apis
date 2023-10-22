@@ -172,7 +172,7 @@ def get_untested_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and ((feedback = '' and rejectedReason = ''))", True).fetchone()
+		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and (((feedback = '' and advice = '') and rejectedReason = ''))", True).fetchone()
 
 		data["trying"] = testing != None
 
@@ -215,9 +215,9 @@ def get_my_products():
 	sql = "select *, "
 
 	# testing
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and (feedback = '' and rejectedReason = '')) as numTesting, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and ((feedback = '' and advice = '') and rejectedReason = '')) as numTesting, "
 	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not rejectedReason = '') as numRejected, "
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not feedback = '' and rejectedReason = '') as numFeedback, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not (feedback = '' and advice = '') and rejectedReason = '') as numFeedback, "
 	sql += "(select count(*) from product_testing where productId = product.id and earned = 1) as rewarded "
 	sql += "from product where creatorId = " + userId + " limit " + str(offset) + ", 10"
 
@@ -252,18 +252,18 @@ def try_product():
 		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
 		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>GET PRODUCT FEEDBACK</h3>		</div>		"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
 		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
-		html += "Yay! Someone is currently using your product, " + product["name"]
+		html += "Yay! Someone is currently trying out your product, " + product["name"]
 		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
 		html += "</div>	</div></body></html>"
 
 		send_email(creator["email"], "A customer is trying our your product", html)
 
 		if testing == None:
-			query("insert into product_testing (testerId, productId, feedback, earned, rejectedReason) values (" + userId + ", " + productId + ", '', 0, '')")
+			query("insert into product_testing (testerId, productId, feedback, advice, earned, rejectedReason) values (" + userId + ", " + productId + ", '', '', 0, '')")
 		else:
-			query("update product_testing set feedback = '', rejectedReason = '' where id = " + str(testing["id"]))
+			query("update product_testing set feedback = '', advice = '', rejectedReason = '' where id = " + str(testing["id"]))
 
 		return { "msg": "" }
 
@@ -277,18 +277,17 @@ def get_feedbacks():
 	offset = content['offset']
 
 	sql = "select * from product where creatorId = " + userId
-	sql += " and id in (select productId from product_testing where not feedback = '' and earned = 0 and rejectedReason = '')"
+	sql += " and id in (select productId from product_testing where not (feedback = '' and advice = '') and earned = 0 and rejectedReason = '')"
 	sql += " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 	products = []
 
 	for data in datas:
-		feedbacks = query("select id, feedback, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
+		feedbacks = query("select id, feedback, advice, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
 
 		for info in feedbacks:
 			info["key"] = "feedback-" + str(data["id"]) + "-" + str(info["id"])
-			info["header"] = info["feedback"]
 
 		products.append({
 			**data,
@@ -306,17 +305,15 @@ def get_product_feedbacks():
 
 	productId = str(content['productId'])
 
-	feedbacks = query("select id, feedback, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
+	feedbacks = query("select id, feedback, advice, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
 	product = query("select name, image from product where id = " + productId, True).fetchone()
 
 	for info in feedbacks:
 		info["key"] = "feedback-" + str(info["id"])
-		info["header"] = info["feedback"]
-
-		del info["feedback"]
 
 	return { 
 		"feedbacks": feedbacks, 
 		"name": product["name"], 
 		"logo": json.loads(product["image"])
 	}
+

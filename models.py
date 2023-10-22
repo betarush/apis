@@ -64,13 +64,15 @@ class ProductTesting(db.Model):
 	testerId = db.Column(db.Integer)
 	productId = db.Column(db.Integer)
 	feedback = db.Column(db.String(500))
+	advice = db.Column(db.String(500))
 	earned = db.Column(db.Boolean)
 	rejectedReason = db.Column(db.String(200))
 
-	def __init__(self, testerId, productId, feedback, earned, rejectedReason):
+	def __init__(self, testerId, productId, feedback, advice, earned, rejectedReason):
 		self.testerId = testerId
 		self.productId = productId
 		self.feedback = feedback
+		self.advice = advice
 		self.earned = earned
 		self.rejectedReason = rejectedReason
 
