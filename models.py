@@ -22,7 +22,7 @@ db = SQLAlchemy(app)
 class User(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	email = db.Column(db.String(50))
-	password = db.Column(db.String(110), unique=True)
+	password = db.Column(db.String(170), unique=True)
 	username = db.Column(db.String(25), unique=True)
 	earnings = db.Column(db.Float())
 	bankaccountInfo = db.Column(db.String(220))

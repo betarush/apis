@@ -78,7 +78,7 @@ def verify():
 		# email sent properly
 		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
-		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; height: 200px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
 		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
 		html += "<div style='color: black; font-size: 25px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 		html += "Your verification code is " + verifyCode
@@ -399,7 +399,7 @@ def reward_customer():
 	# email sent properly
 	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
-	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 400px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
 	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
 	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 	html += "Congrats!! You have been rewarded $" + str(format(rewardAmount, ".2f")) + " for your advice/feedback on a product, " + product["name"]
@@ -427,7 +427,7 @@ def reject_feedback():
 
 	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
-	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; height: 500px; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
 	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
 	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 	html += "Your advice/feedback was rejected" + (" with a reason: " + str(reason) if str(reason) != "" else "")
