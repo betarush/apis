@@ -44,45 +44,8 @@ def list_product():
 
 	if user != None:
 		image = json.dumps({ "name": imageName, "width": round(image["width"], 2), "height": round(image["height"], 2) })
-		tokens = json.loads(user["tokens"])
-		paymentMethod = stripe.Customer.list_payment_methods(
-		  tokens["creator"],
-		  type="card",
-		)
-		methodId = paymentMethod.data[0].id
 
-		amount = launchAmount + appFee
-		transferGroup = getId()
-		charge = stripe.PaymentIntent.create(
-			amount=int(amount * 100),
-			currency="cad",
-			customer=tokens["creator"],
-			payment_method=methodId,
-			transfer_group=transferGroup,
-			confirm=True,
-			automatic_payment_methods={
-				"enabled": True,
-				"allow_redirects": "never"
-			}
-		)
-		chargeInfo = {
-			"country": paymentMethod.data[0].card.country,
-			"currency": charge.currency
-		}
-		amount = get_stripe_fee(chargeInfo, amount)
-		payoutAmount = int((amount - launchAmount) * 100)
-		balance = get_balance()
-
-		if balance >= payoutAmount and pending == False:
-			stripe.Payout.create(
-				amount=payoutAmount,
-				currency="cad"
-			)
-		else:
-			query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
-
-		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
-
+		otherInfo = json.dumps({ "charge": "", "transferGroup": "" })
 		query("insert into product (name, image, info, link, creatorId, otherInfo, amountLeftover, amountSpent) values ('" + name + "', '" + image + "', '" + desc + "', '" + link + "', " + userId + ", '" + otherInfo + "', " + str(round(launchAmount, 2)) + ", " + str(round(launchAmount, 2)) + ")")
 
 		if user["firstTime"] == True:
@@ -172,7 +135,7 @@ def get_untested_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select id, feedback from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and (((feedback = '' and advice = '') and rejectedReason = ''))", True).fetchone()
+		testing = query("select id, advice from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and ((advice = '' and rejectedReason = ''))", True).fetchone()
 
 		data["trying"] = testing != None
 
@@ -197,10 +160,10 @@ def get_testing_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select earned, feedback from product_testing where productId = " + str(data["id"]), True).fetchone()
+		testing = query("select earned, advice from product_testing where productId = " + str(data["id"]), True).fetchone()
 
 		data["earned"] = testing["earned"] == True
-		data["gave_feedback"] = testing["feedback"] != ""
+		data["gave_feedback"] = testing["advice"] != ""
 		data["reward"] = data["amountSpent"] / 5
 
 	return { "products": datas, "offset": len(datas) + offset }
@@ -215,9 +178,9 @@ def get_my_products():
 	sql = "select *, "
 
 	# testing
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and ((feedback = '' and advice = '') and rejectedReason = '')) as numTesting, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and (advice = '' and rejectedReason = '')) as numTesting, "
 	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not rejectedReason = '') as numRejected, "
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not (feedback = '' and advice = '') and rejectedReason = '') as numFeedback, "
+	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not advice = '' and rejectedReason = '') as numFeedback, "
 	sql += "(select count(*) from product_testing where productId = product.id and earned = 1) as rewarded "
 	sql += "from product where creatorId = " + userId + " limit " + str(offset) + ", 10"
 
@@ -228,7 +191,8 @@ def get_my_products():
 		data["logo"] = json.loads(data["image"])
 
 		otherInfo = json.loads(data["otherInfo"])
-		charge = stripe.PaymentIntent.retrieve(otherInfo["charge"])
+
+		data["deposited"] = otherInfo["charge"] != ""
 		data["amountSpent"] = round(data["amountSpent"], 2)
 		data["numLeftover"] = 5 - ((data["amountSpent"] - data["amountLeftover"]) / (data["amountSpent"] / 5))
 		
@@ -252,7 +216,7 @@ def try_product():
 		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
 		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
 		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 		html += "Yay! Someone is currently trying out your product, " + product["name"]
 		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
@@ -261,9 +225,9 @@ def try_product():
 		send_email(creator["email"], "A customer is trying our your product", html)
 
 		if testing == None:
-			query("insert into product_testing (testerId, productId, feedback, advice, earned, rejectedReason) values (" + userId + ", " + productId + ", '', '', 0, '')")
+			query("insert into product_testing (testerId, productId, advice, earned, rejectedReason) values (" + userId + ", " + productId + ", '', 0, '')")
 		else:
-			query("update product_testing set feedback = '', advice = '', rejectedReason = '' where id = " + str(testing["id"]))
+			query("update product_testing set advice = '', rejectedReason = '' where id = " + str(testing["id"]))
 
 		return { "msg": "" }
 
@@ -277,24 +241,26 @@ def get_feedbacks():
 	offset = content['offset']
 
 	sql = "select * from product where creatorId = " + userId
-	sql += " and id in (select productId from product_testing where not (feedback = '' and advice = '') and earned = 0 and rejectedReason = '')"
+	sql += " and id in (select productId from product_testing where not advice = '' and earned = 0 and rejectedReason = '')"
 	sql += " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 	products = []
 
 	for data in datas:
-		feedbacks = query("select id, feedback, advice, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
+		feedbacks = query("select id, advice, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
+		otherInfo = json.loads(data["otherInfo"])
 
 		for info in feedbacks:
-			info["key"] = "feedback-" + str(data["id"]) + "-" + str(info["id"])
+			info["key"] = "advice-" + str(data["id"]) + "-" + str(info["id"])
 
 		products.append({
 			**data,
 			"key": "product-" + str(data["id"]),
 			"name": data["name"],
 			"image": json.loads(data["image"]),
-			"feedbacks": feedbacks
+			"feedbacks": feedbacks,
+			"deposited": True if otherInfo["charge"] != "" else False
 		})
 
 	return { "products": products, "offset": len(datas) + offset }
@@ -305,8 +271,10 @@ def get_product_feedbacks():
 
 	productId = str(content['productId'])
 
-	feedbacks = query("select id, feedback, advice, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
-	product = query("select name, image from product where id = " + productId, True).fetchone()
+	feedbacks = query("select id, advice, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
+	product = query("select name, image, otherInfo from product where id = " + productId, True).fetchone()
+
+	otherInfo = json.loads(product["otherInfo"])
 
 	for info in feedbacks:
 		info["key"] = "feedback-" + str(info["id"])
@@ -314,6 +282,7 @@ def get_product_feedbacks():
 	return { 
 		"feedbacks": feedbacks, 
 		"name": product["name"], 
-		"logo": json.loads(product["image"])
+		"logo": json.loads(product["image"]),
+		"deposited": otherInfo["charge"] != ""
 	}
 

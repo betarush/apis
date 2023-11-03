@@ -19,7 +19,7 @@ mail = Mail(app)
 
 @app.route("/welcome_user")
 def welcome_user():
-	return "startupfeedback: Welcome to user"
+	return "betarush: Welcome to user"
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -79,13 +79,13 @@ def verify():
 		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
 		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
+		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
 		html += "<div style='color: black; font-size: 25px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 		html += "Your verification code is " + verifyCode
 		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
 		html += "</div>	</div></body></html>"
 
-		send_email(email, "Waver Verification Code", html)
+		send_email(email, "BetaRush Verification Code", html)
 
 		return { "verifycode": verifyCode }
 
@@ -367,11 +367,53 @@ def create_customer_payment():
 	content = request.get_json()
 
 	userId = str(content['userId'])
+	productId = str(content['productId'])
 	sessionId = content['sessionId']
 
 	user = query("select tokens from user where id = " + userId, True).fetchone()
+	product = query("select otherInfo from product where id = " + productId, True).fetchone()
 	tokens = json.loads(user["tokens"])
 	creatorId = tokens["creator"]
+	
+	paymentMethod = stripe.Customer.list_payment_methods(
+	  tokens["creator"],
+	  type="card",
+	)
+	methodId = paymentMethod.data[0].id
+
+	amount = launchAmount + appFee
+	transferGroup = getId()
+	charge = stripe.PaymentIntent.create(
+		amount=int(amount * 100),
+		currency="cad",
+		customer=tokens["creator"],
+		payment_method=methodId,
+		transfer_group=transferGroup,
+		confirm=True,
+		automatic_payment_methods={
+			"enabled": True,
+			"allow_redirects": "never"
+		}
+	)
+	chargeInfo = {
+		"country": paymentMethod.data[0].card.country,
+		"currency": charge.currency
+	}
+	amount = get_stripe_fee(chargeInfo, amount)
+	payoutAmount = int((amount - launchAmount) * 100)
+	balance = get_balance()
+
+	if balance >= payoutAmount and pending == False:
+		stripe.Payout.create(
+			amount=payoutAmount,
+			currency="cad"
+		)
+	else:
+		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
+
+	otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
+
+	query("update product set otherInfo = '" + otherInfo + "' where id = " + productId)
 
 	info = stripe.checkout.Session.retrieve(sessionId)
 	info = stripe.SetupIntent.retrieve(info.setup_intent)
@@ -400,7 +442,7 @@ def reward_customer():
 	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
 	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
 	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>WAVER</h3>		</div>		"
+	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
 	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 	html += "Congrats!! You have been rewarded $" + str(format(rewardAmount, ".2f")) + " for your advice/feedback on a product, " + product["name"]
 	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"

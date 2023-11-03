@@ -45,7 +45,7 @@ class Product(db.Model):
 	info = db.Column(db.String(100))
 	link = db.Column(db.String(50))
 	creatorId = db.Column(db.Integer)
-	otherInfo = db.Column(db.String(85), unique=True)
+	otherInfo = db.Column(db.String(85))
 	amountLeftover = db.Column(db.Float)
 	amountSpent = db.Column(db.Float)
 
@@ -63,15 +63,13 @@ class ProductTesting(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	testerId = db.Column(db.Integer)
 	productId = db.Column(db.Integer)
-	feedback = db.Column(db.String(500))
 	advice = db.Column(db.String(500))
 	earned = db.Column(db.Boolean)
 	rejectedReason = db.Column(db.String(200))
 
-	def __init__(self, testerId, productId, feedback, advice, earned, rejectedReason):
+	def __init__(self, testerId, productId, advice, earned, rejectedReason):
 		self.testerId = testerId
 		self.productId = productId
-		self.feedback = feedback
 		self.advice = advice
 		self.earned = earned
 		self.rejectedReason = rejectedReason
