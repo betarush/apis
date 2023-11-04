@@ -108,7 +108,14 @@ def get_user_info():
 			  tokens["creator"],
 			  type="card",
 			)
-			paymentMethod = len(paymentMethod.data) > 0
+
+			if len(paymentMethod.data) > 0:
+				paymentMethod = {
+					"brand": paymentMethod.data[0].card.brand,
+					"last4": paymentMethod.data[0].card.last4
+				}
+			else:
+				paymentMethod = False
 		else:
 			paymentMethod = False
 
@@ -368,13 +375,15 @@ def create_customer_payment():
 
 	userId = str(content['userId'])
 	productId = str(content['productId'])
-	sessionId = content['sessionId']
+	sessionId = content['sessionId'] if "sessionId" in content else None
 
 	user = query("select tokens from user where id = " + userId, True).fetchone()
 	product = query("select otherInfo from product where id = " + productId, True).fetchone()
+
 	tokens = json.loads(user["tokens"])
 	creatorId = tokens["creator"]
-	
+
+	otherInfo = json.loads(product["otherInfo"])
 	paymentMethod = stripe.Customer.list_payment_methods(
 	  tokens["creator"],
 	  type="card",
@@ -415,13 +424,14 @@ def create_customer_payment():
 
 	query("update product set otherInfo = '" + otherInfo + "' where id = " + productId)
 
-	info = stripe.checkout.Session.retrieve(sessionId)
-	info = stripe.SetupIntent.retrieve(info.setup_intent)
+	if sessionId != None:
+		info = stripe.checkout.Session.retrieve(sessionId)
+		info = stripe.SetupIntent.retrieve(info.setup_intent)
 
-	info = stripe.PaymentMethod.attach(
-	  info.payment_method,
-	  customer=creatorId,
-	)
+		info = stripe.PaymentMethod.attach(
+			info.payment_method,
+			customer=creatorId,
+		)
 
 	return { "msg": "" }
 

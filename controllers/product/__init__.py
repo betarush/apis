@@ -61,52 +61,45 @@ def relist_product():
 
 	productId = str(content['productId'])
 
-	product = query("select creatorId, otherInfo from product where id = " + productId, True).fetchone()
+	product = query("select id from product where id = " + productId, True).fetchone()
 
 	if product != None:
-		creatorId = str(product["creatorId"])
-		otherInfo = json.loads(product["otherInfo"])
+		# creatorId = str(product["creatorId"])
+		# otherInfo = json.loads(product["otherInfo"])
 
-		creator = query("select tokens from user where id = " + creatorId, True).fetchone()
-		tokens = json.loads(creator["tokens"])
-		paymentMethod = stripe.Customer.list_payment_methods(
-		  tokens["creator"],
-		  type="card",
-		)
-		methodId = paymentMethod.data[0].id
+		# creator = query("select tokens from user where id = " + creatorId, True).fetchone()
+		# tokens = json.loads(creator["tokens"])
+		# paymentMethod = stripe.Customer.list_payment_methods(
+		#   tokens["creator"],
+		#   type="card",
+		# )
+		# methodId = paymentMethod.data[0].id
 
-		amount = launchAmount + appFee
-		transferGroup = getId()
-		charge = stripe.PaymentIntent.create(
-			amount=int(amount * 100),
-			currency="cad",
-			customer=tokens["creator"],
-			payment_method=methodId,
-			transfer_group=transferGroup,
-			confirm=True,
-			automatic_payment_methods={
-				"enabled": True,
-				"allow_redirects": "never"
-			}
-		)
-		chargeInfo = {
-			"country": paymentMethod.data[0].card.country,
-			"currency": charge.currency
-		}
-		amount = get_stripe_fee(chargeInfo, amount)
-		payoutAmount = int((amount - launchAmount) * 100)
-		balance = get_balance()
+		# amount = launchAmount + appFee
+		# transferGroup = getId()
+		# charge = stripe.PaymentIntent.create(
+		# 	amount=int(amount * 100),
+		# 	currency="cad",
+		# 	customer=tokens["creator"],
+		# 	payment_method=methodId,
+		# 	transfer_group=transferGroup,
+		# 	confirm=True,
+		# 	automatic_payment_methods={
+		# 		"enabled": True,
+		# 		"allow_redirects": "never"
+		# 	}
+		# )
+		# chargeInfo = {
+		# 	"country": paymentMethod.data[0].card.country,
+		# 	"currency": charge.currency
+		# }
+		# amount = get_stripe_fee(chargeInfo, amount)
+		# payoutAmount = int((amount - launchAmount) * 100)
+		# balance = get_balance()
 
-		# if balance >= payoutAmount:
-		# 	stripe.Payout.create(
-		# 		amount=payoutAmount,
-		# 		currency="cad"
-		# 	)
-		# else:
-		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
+		#query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
 
-		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup })
-
+		otherInfo = json.dumps({ "charge": "", "transferGroup": "" })
 		query("update product set amountLeftover = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
 
 		return { "msg": "" }
