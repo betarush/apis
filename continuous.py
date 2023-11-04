@@ -77,6 +77,23 @@ with app.app_context():
 
 		print("balance is zero", time())
 
+		# refund creators the leftover deposit after a week of deposit
+		products = query("select id, otherInfo, amountLeftover from product where " + str(time()) + " - deposited > 604800 limit 5", True).fetchall()
+
+		for product in products:
+			otherInfo = json.loads(product["otherInfo"])
+			leftoverDeposit = int(product["amountLeftover"])
+
+			stripe.Refund.create(
+				charge=otherInfo["charge"],
+				amount=leftoverDeposit * 100
+			)
+
+			otherInfo["charge"] = ""
+			otherInfo["transferGroup"] = ""
+
+			query("update product set otherInfo = '" + json.dumps(otherInfo) + "', amountLeftover = 20, amountSpent = 20 where id = " + str(product["id"]))
+
 		sleep(3)
 
 	print("DONE")

@@ -422,7 +422,7 @@ def create_customer_payment():
 
 	otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
 
-	query("update product set otherInfo = '" + otherInfo + "' where id = " + productId)
+	query("update product set otherInfo = '" + otherInfo + "', deposited = " + str(time()) + " where id = " + productId)
 
 	if sessionId != None:
 		info = stripe.checkout.Session.retrieve(sessionId)
