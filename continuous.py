@@ -78,16 +78,25 @@ with app.app_context():
 		print("balance is zero", time())
 
 		# refund creators the leftover deposit after a week of deposit
-		products = query("select id, otherInfo, amountLeftover from product where " + str(time()) + " - deposited > 604800 limit 5", True).fetchall()
+		sql = "select id, otherInfo, amountLeftover from product where "
+		sql += "not json_extract(otherInfo, '$.charge') = '' and  "
+		sql += str(time()) + " - deposited > 604800"
+		sql += " limit 5"
+		products = query(sql, True).fetchall()
 
 		for product in products:
 			otherInfo = json.loads(product["otherInfo"])
 			leftoverDeposit = int(product["amountLeftover"])
 
-			stripe.Refund.create(
-				charge=otherInfo["charge"],
-				amount=leftoverDeposit * 100
-			)
+			try:
+				stripe.Refund.create(
+					charge=otherInfo["charge"],
+					amount=int(leftoverDeposit * 100)
+				)
+
+				print("refunded $" + str(leftoverDeposit) + " to charge id of " + otherInfo["charge"])
+			except:
+				print("no such charge")
 
 			otherInfo["charge"] = ""
 			otherInfo["transferGroup"] = ""
@@ -99,4 +108,4 @@ with app.app_context():
 	print("DONE")
 
 # get process id: ps -ef | grep python
-# start autopayout: nohup python payout.py &
+# start autopayout: nohup python continuous.py &
