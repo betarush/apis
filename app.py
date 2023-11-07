@@ -41,4 +41,5 @@ app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {
 })
 
 if __name__ == "__main__":
+	print(os.getenv("CLIENT_URL"))
 	run_simple(str(os.getenv("HOST")), int(os.getenv("PORT")), app, use_reloader=True, use_debugger=True, use_evalex=True)
