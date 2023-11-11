@@ -36,11 +36,11 @@ def register():
 		email=email
 	)
 
-	tokens = json.dumps({ "creator": creator.id, "account": "" })
+	tokens = json.dumps({ "customer": creator.id, "account": "" })
 
 	password = generate_password_hash(password)
 
-	userId = query("insert into user (email, password, username, earnings, bankaccountInfo, tokens, firstTime) values ('" + email + "', '" + password + "', '" + username + "', 0.0, '" + bankaccountInfo + "', '" + tokens + "', 1)", True).lastrowid
+	userId = query("insert into user (email, password, username, earnings, bankaccountInfo, tokens, firstTime, isBanned) values ('" + email + "', '" + password + "', '" + username + "', 0.0, '" + bankaccountInfo + "', '" + tokens + "', 1, 0)", True).lastrowid
 
 	return { "id": userId }
 
@@ -97,15 +97,20 @@ def get_user_info():
 
 	userId = str(content['userId'])
 
-	user = query("select email, tokens, firstTime from user where id = " + userId, True).fetchone()
+	user = query("select email, tokens, firstTime, isBanned from user where id = " + userId, True).fetchone()
 
 	if user != None:
+		sql = "select count(*) as num from product_testing where not advice = '' and productId in (select id from product where creatorId = " + userId + ") and ("
+		sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId"
+		sql += ") = 0"
+		numAdvices = query(sql, True).fetchone()["num"]
+
 		username = user["email"].split("@")[0]
 		tokens = json.loads(user["tokens"])
 
-		if tokens["creator"] != "":
+		if tokens["customer"] != "":
 			paymentMethod = stripe.Customer.list_payment_methods(
-			  tokens["creator"],
+			  tokens["customer"],
 			  type="card",
 			)
 
@@ -115,9 +120,9 @@ def get_user_info():
 					"last4": paymentMethod.data[0].card.last4
 				}
 			else:
-				paymentMethod = False
+				paymentMethod = { "brand": "", "last4": "" }
 		else:
-			paymentMethod = False
+			paymentMethod = { "brand": "", "last4": "" }
 
 		if tokens["account"] != "":
 			account = stripe.Account.retrieve(tokens["account"])
@@ -125,9 +130,11 @@ def get_user_info():
 		else:
 			account = False
 
-		rejectedReasons = query("select count(*) as num from product_testing where testerId = " + userId + " and not rejectedReason = ''", True).fetchone()["num"]
 		numCreatedProducts = query("select count(*) as num from product where creatorId = " + userId, True).fetchone()["num"]
-		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where earned = 1 and testerId = " + userId + ")", True).fetchone()
+		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where testerId = " + userId + ") and not json_extract(otherInfo, '$.charge') = ''", True).fetchone()
+		
+		sql = "select count(*) * 2 as num from product_testing where (select count(*) from product where id = product_testing.productId and json_extract(otherInfo, '$.charge') = '') > 0"
+		amountPending = query(sql, True).fetchone()["num"]
 		earnings = 0
 
 		if amountEarned["earnings"] != None:
@@ -136,14 +143,51 @@ def get_user_info():
 		return {
 			"username": username,
 			"earnings": earnings,
-			"rejectedReasons": rejectedReasons,
+			"numAdvices": numAdvices,
 			"paymentDone": paymentMethod,
+			"amountPending": amountPending,
 			"bankaccountDone": account,
 			"firstTime": user["firstTime"],
-			"isCreator": numCreatedProducts > 0
+			"isCreator": numCreatedProducts > 0,
+			"banned": user["isBanned"] == 1
 		}
 
 	return { "status": "nonExist" }, 400
+
+@app.route("/get_ratings_num", methods=["POST"])
+def get_ratings_num():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+
+	return { 
+		"ratings": {
+			"numWarns": query("select count(*) as num from tester_rate where testerId = " + userId + " and type = 'warn'", True).fetchone()["num"],
+			"numGoods": query("select count(*) as num from tester_rate where testerId = " + userId + " and type = 'good'", True).fetchone()["num"],
+			"numNice": query("select count(*) as num from tester_rate where testerId = " + userId + " and type = 'nice'", True).fetchone()["num"]
+		}
+	}
+
+@app.route("/get_ratings", methods=["POST"])
+def get_ratings():
+	content = request.get_json()
+
+	userId = str(content['userId'])
+	type = content['type']
+
+	rates = query("select id, reason, advice, productId from tester_rate where testerId = " + userId + " and type = '" + type + "' order by created desc", True).fetchall()
+
+	for rate in rates:
+		rate["key"] = "rate-" + str(rate["id"])
+
+		product = query("select name, image from product where id = " + str(rate["productId"]), True).fetchone()
+
+		rate["product"] = {
+			"logo": json.loads(product["image"]),
+			"name": product["name"]
+		}
+
+	return { "rates": rates }
 
 @app.route("/update_first_time", methods=["POST"])
 def update_first_time():
@@ -167,7 +211,7 @@ def get_payment_info():
 		tokens = json.loads(user["tokens"])
 
 		methods = stripe.PaymentMethod.list(
-		  customer=tokens["creator"],
+		  customer=tokens["customer"],
 		  type="card",
 		)
 		card = None
@@ -220,16 +264,16 @@ def submit_payment_info():
 
 	if user != None:
 		tokens = json.loads(user["tokens"])
-		customer = stripe.Customer.list_sources(tokens["creator"], object="card", limit=1)
+		customer = stripe.Customer.list_sources(tokens["customer"], object="card", limit=1)
 
 		if len(customer.data) == 0:
 			stripe.Customer.create_source(
-				tokens["creator"],
+				tokens["customer"],
 				source=token
 			)
 		else:
 			stripe.Customer.modify(
-				tokens["creator"],
+				tokens["customer"],
 				source=token
 			)
 
@@ -312,36 +356,38 @@ def get_earnings():
 	tester = query("select id, email, tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(tester["tokens"])
 
-	earnings = query("select id, productId from product_testing where testerId = " + userId + " and earned = 1 limit 5", True).fetchall()
+	earnings = query("select id, productId from product_testing where testerId = " + userId + " limit 5", True).fetchall()
 	earnedAmount = 0.0
 	pendingEarned = 0.0
 
 	for info in earnings:
 		product = query("select name, otherInfo, amountSpent from product where id = " + str(info["productId"]), True).fetchone()
 		otherInfo = json.loads(product["otherInfo"])
-		transferGroup = otherInfo["transferGroup"]
-		amount = product["amountSpent"] / 5
 
-		transferAmount = int(amount * 100)
-		balance = get_balance()
-		earnedAmount += amount
+		if otherInfo["charge"] != "" and otherInfo["transferGroup"] != "":
+			transferGroup = otherInfo["transferGroup"]
+			amount = product["amountSpent"] / 5
 
-		if balance >= transferAmount and pending == False:
-			stripe.Transfer.create(
-				amount=transferAmount,
-				currency="cad",
-				description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
-				destination=tokens["account"],
-				transfer_group=transferGroup
-			)
-		else:
-			query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
+			transferAmount = int(amount * 100)
+			balance = get_balance()
+			earnedAmount += amount
 
-			pendingEarned += amount
+			if balance >= transferAmount and pending == False:
+				stripe.Transfer.create(
+					amount=transferAmount,
+					currency="cad",
+					description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
+					destination=tokens["account"],
+					transfer_group=transferGroup
+				)
+			else:
+				query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
 
-		query("delete from product_testing where id = " + str(info["id"]))
+				pendingEarned += amount
 
-	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId + " and earned = 1", True).fetchone()["num"]
+			query("delete from product_testing where id = " + str(info["id"]))
+
+	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId, True).fetchone()["num"]
 
 	return { 
 		"earnedAmount": earnedAmount,
@@ -362,7 +408,7 @@ def create_checkout():
 	session = stripe.checkout.Session.create(
 	  payment_method_types=['card'],
 	  mode='setup',
-	  customer=tokens["creator"],
+	  customer=tokens["customer"],
 	  success_url=os.getenv("CLIENT_URL") + '/' + redirect + '?session_id={CHECKOUT_SESSION_ID}',
 	  cancel_url=os.getenv("CLIENT_URL") + '/' + redirect,
 	)
@@ -374,55 +420,67 @@ def create_customer_payment():
 	content = request.get_json()
 
 	userId = str(content['userId'])
-	productId = str(content['productId'])
+	productId = str(content['productId']) if "productId" in content and content["productId"] != None else None
 	sessionId = content['sessionId'] if "sessionId" in content else None
 
 	user = query("select tokens from user where id = " + userId, True).fetchone()
-	product = query("select otherInfo from product where id = " + productId, True).fetchone()
-
 	tokens = json.loads(user["tokens"])
-	creatorId = tokens["creator"]
+	customerId = tokens["customer"]
 
-	otherInfo = json.loads(product["otherInfo"])
 	paymentMethod = stripe.Customer.list_payment_methods(
-	  tokens["creator"],
-	  type="card",
+		tokens["customer"],
+		type="card",
 	)
 	methodId = paymentMethod.data[0].id
 
-	amount = launchAmount + appFee
-	transferGroup = getId()
-	charge = stripe.PaymentIntent.create(
-		amount=int(amount * 100),
-		currency="cad",
-		customer=tokens["creator"],
-		payment_method=methodId,
-		transfer_group=transferGroup,
-		confirm=True,
-		automatic_payment_methods={
-			"enabled": True,
-			"allow_redirects": "never"
-		}
-	)
-	chargeInfo = {
-		"country": paymentMethod.data[0].card.country,
-		"currency": charge.currency
-	}
-	amount = get_stripe_fee(chargeInfo, amount)
-	payoutAmount = int((amount - launchAmount) * 100)
-	balance = get_balance()
-
-	if balance >= payoutAmount and pending == False:
-		stripe.Payout.create(
-			amount=payoutAmount,
-			currency="cad"
+	if productId != None:
+		product = query("select otherInfo from product where id = " + productId, True).fetchone()
+		otherInfo = json.loads(product["otherInfo"])
+		amount = launchAmount + appFee
+		transferGroup = getId()
+		charge = stripe.PaymentIntent.create(
+			amount=int(amount * 100),
+			currency="cad",
+			customer=customerId,
+			payment_method=methodId,
+			transfer_group=transferGroup,
+			confirm=True,
+			automatic_payment_methods={
+				"enabled": True,
+				"allow_redirects": "never"
+			}
 		)
+		chargeInfo = {
+			"country": paymentMethod.data[0].card.country,
+			"currency": charge.currency
+		}
+		amount = get_stripe_fee(chargeInfo, amount)
+		payoutAmount = int((amount - launchAmount) * 100)
+		balance = get_balance()
+
+		if balance >= payoutAmount and pending == False:
+			stripe.Payout.create(
+				amount=payoutAmount,
+				currency="cad"
+			)
+		else:
+			query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
+
+		otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
+		query("update product set otherInfo = '" + otherInfo + "', deposited = " + str(time()) + " where id = " + productId)
 	else:
-		query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
-
-	otherInfo = json.dumps({"charge": charge.id, "transferGroup": transferGroup})
-
-	query("update product set otherInfo = '" + otherInfo + "', deposited = " + str(time()) + " where id = " + productId)
+		charge = stripe.PaymentIntent.create(
+			amount=int(regainAmount * 100),
+			currency="cad",
+			customer=customerId,
+			payment_method=methodId,
+			confirm=True,
+			automatic_payment_methods={
+				"enabled": True,
+				"allow_redirects": "never"
+			}
+		)
+		query("update user set isBanned = 0 where id = " + userId)
 
 	if sessionId != None:
 		info = stripe.checkout.Session.retrieve(sessionId)
@@ -430,67 +488,56 @@ def create_customer_payment():
 
 		info = stripe.PaymentMethod.attach(
 			info.payment_method,
-			customer=creatorId,
+			customer=customerId,
 		)
 
 	return { "msg": "" }
 
-@app.route("/reward_customer", methods=["POST"])
-def reward_customer():
+@app.route("/rate_customer", methods=["POST"])
+def rate_customer():
 	content = request.get_json()
 
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
-
-	product = query("select name, amountLeftover, amountSpent from product where id = " + productId, True).fetchone()
-	amount = float(product["amountLeftover"]) - (product["amountSpent"] / 5)
-	tester = query("select email from user where id = " + testerId, True).fetchone()
-
-	rewardAmount = product["amountSpent"] / 5
-
-	# email sent properly
-	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
-	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
-	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
-	html += "Congrats!! You have been rewarded $" + str(format(rewardAmount, ".2f")) + " for your advice/feedback on a product, " + product["name"]
-	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
-	html += "/earnings'>Get your reward"
-	html += "</a>		</div>	</div></body></html>"
-
-	send_email(tester["email"], "Wow, You have been rewarded $" + str(format(rewardAmount, ".2f")), html)
-
-	query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + productId)
-	query("update product_testing set earned = 1 where productId = " + productId + " and testerId = " + testerId)
-
-	return { "msg": "" }
-
-@app.route("/reject_feedback", methods=["POST"])
-def reject_feedback():
-	content = request.get_json()
-
-	productId = str(content['productId'])
-	testerId = str(content['testerId'])
+	type = content['type']
 	reason = content['reason']
 
-	tester = query("select email from user where id = " + testerId, True).fetchone()
+	productTesting = query("select id, advice from product_testing where productId = " + productId + " and testerId = " + testerId, True).fetchone()
+	query("insert into tester_rate (productId, testerId, testingId, type, reason, advice, created) values (" + productId + ", " + testerId + ",  " + str(productTesting["id"]) + ", '" + type + "', '" + reason + "', '" + pymysql.converters.escape_string(productTesting["advice"]) + "', " + str(time()) + ")")
 
-	html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-	html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: #000000; color: white; }</style></head><body>	"
-	html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-	html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div>		</div>		"
-	html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
-	html += "Your advice/feedback was rejected" + (" with a reason: " + str(reason) if str(reason) != "" else "")
-	html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-	html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
-	html += "/rejections'>See the rejection"
-	html += "</a>		</div>	</div></body></html>"
+	if type == "warn":
+		tester = query("select email from user where id = " + testerId, True).fetchone()
+		product = query("select name from product where id = " + productId, True).fetchone()
+		warned = query("select count(*) as num from tester_rate where testerId = " + testerId, True).fetchone()["num"]
 
-	send_email(tester["email"], "Sorry, one of your advice/feedback has been rejected", html)
+		if warned == 0:
+			# email sent properly
+			html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+			html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+			html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+			html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
+			html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+			html += "You have been warned to be banned because of an advice you gave for the product: " + product["name"] + ". Next time, you will be banned and will have to pay $10.00 to regain your account"
+			html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+			html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
+			html += "/ratings'>See your ratings"
+			html += "</a>		</div>	</div></body></html>"
 
-	query("update product_testing set rejectedReason = '" + reason + "' where productId = " + productId + " and testerId = " + testerId)
+			send_email(tester["email"], "You have been warned to be banned", html)
+		else:
+			query("update user set isBanned = 1 where id = " + testerId)
+
+			html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+			html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+			html += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+			html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
+			html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+			html += "You have been banned because of an advice you gave for the product: " + product["name"] + ". Pay $2.00 to regain your account"
+			html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+			html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
+			html += "/ratings'>See your ratings"
+			html += "</a>		</div>	</div></body></html>"
+
+			send_email(tester["email"], "You have been banned", html)
 
 	return { "msg": "" }
-

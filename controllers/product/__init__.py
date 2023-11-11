@@ -64,41 +64,6 @@ def relist_product():
 	product = query("select id from product where id = " + productId, True).fetchone()
 
 	if product != None:
-		# creatorId = str(product["creatorId"])
-		# otherInfo = json.loads(product["otherInfo"])
-
-		# creator = query("select tokens from user where id = " + creatorId, True).fetchone()
-		# tokens = json.loads(creator["tokens"])
-		# paymentMethod = stripe.Customer.list_payment_methods(
-		#   tokens["creator"],
-		#   type="card",
-		# )
-		# methodId = paymentMethod.data[0].id
-
-		# amount = launchAmount + appFee
-		# transferGroup = getId()
-		# charge = stripe.PaymentIntent.create(
-		# 	amount=int(amount * 100),
-		# 	currency="cad",
-		# 	customer=tokens["creator"],
-		# 	payment_method=methodId,
-		# 	transfer_group=transferGroup,
-		# 	confirm=True,
-		# 	automatic_payment_methods={
-		# 		"enabled": True,
-		# 		"allow_redirects": "never"
-		# 	}
-		# )
-		# chargeInfo = {
-		# 	"country": paymentMethod.data[0].card.country,
-		# 	"currency": charge.currency
-		# }
-		# amount = get_stripe_fee(chargeInfo, amount)
-		# payoutAmount = int((amount - launchAmount) * 100)
-		# balance = get_balance()
-
-		#query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('', '', " + str(payoutAmount) + ", '', " + str(time()) + ")")
-
 		otherInfo = json.dumps({ "charge": "", "transferGroup": "" })
 		query("update product set amountLeftover = " + str(round(launchAmount, 2)) + ", otherInfo = '" + otherInfo + "' where id = " + productId)
 
@@ -114,11 +79,7 @@ def get_untested_products():
 	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and ("
-	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0"
-	sql += " or "
-	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and not rejectedReason = '') > 0"
-	sql += ") and amountLeftover > 0 limit " + str(offset) + ", 10"
+	sql += " and (select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0 and amountLeftover > 0 limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -128,7 +89,7 @@ def get_untested_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select id, advice from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and earned = 0 and ((advice = '' and rejectedReason = ''))", True).fetchone()
+		testing = query("select id, advice from product_testing where testerId = " + userId + " and productId = " + str(data["id"]) + " and advice = ''", True).fetchone()
 
 		data["trying"] = testing != None
 
@@ -145,7 +106,7 @@ def get_testing_products():
 	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + " and rejectedReason = '') > 0 limit " + str(offset) + ", 10"
+	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0 limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -153,9 +114,8 @@ def get_testing_products():
 		data["key"] = "product-" + str(data["id"])
 		data["logo"] = json.loads(data["image"])
 
-		testing = query("select earned, advice from product_testing where productId = " + str(data["id"]), True).fetchone()
+		testing = query("select advice from product_testing where productId = " + str(data["id"]), True).fetchone()
 
-		data["earned"] = testing["earned"] == True
 		data["gave_feedback"] = testing["advice"] != ""
 		data["reward"] = data["amountSpent"] / 5
 
@@ -171,10 +131,12 @@ def get_my_products():
 	sql = "select *, "
 
 	# testing
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and (advice = '' and rejectedReason = '')) as numTesting, "
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not rejectedReason = '') as numRejected, "
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 0 and not advice = '' and rejectedReason = '') as numFeedback, "
-	sql += "(select count(*) from product_testing where productId = product.id and earned = 1) as rewarded "
+	sql += "(select count(*) from product_testing where productId = product.id and advice = '') as numTesting, "
+	sql += "("
+	sql += "select count(*) from product_testing where productId = product.id and not advice = '' and ("
+	sql += "select count(*) from tester_rate where productId = product_testing.productId and testerId = product_testing.testerId and testingId = product_testing.id"
+	sql += ") = 0"
+	sql += ") as numFeedback "
 	sql += "from product where creatorId = " + userId + " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
@@ -198,10 +160,10 @@ def try_product():
 	userId = str(content['userId'])
 	productId = str(content['productId'])
 
-	testing = True
+	user = query("select isBanned from user where id = " + userId, True).fetchone()
 	testing = query("select * from product_testing where testerId = " + userId + " and productId = " + productId, True).fetchone()
 
-	if testing == None or testing["rejectedReason"] != "": # haven't tried yet
+	if testing == None and user["isBanned"] == 0: # haven't tried yet
 		product = query("select creatorId, name from product where id = " + productId, True).fetchone()
 		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
@@ -218,11 +180,13 @@ def try_product():
 		send_email(creator["email"], "A customer is trying our your product", html)
 
 		if testing == None:
-			query("insert into product_testing (testerId, productId, advice, earned, rejectedReason) values (" + userId + ", " + productId + ", '', 0, '')")
+			query("insert into product_testing (testerId, productId, advice) values (" + userId + ", " + productId + ", '')")
 		else:
-			query("update product_testing set advice = '', rejectedReason = '' where id = " + str(testing["id"]))
+			query("update product_testing set advice = '' where id = " + str(testing["id"]))
 
 		return { "msg": "" }
+	elif user["isBanned"] == 1:
+		return { "banned": True }
 
 	return { "status": "nonExist" }, 400
 
@@ -234,14 +198,18 @@ def get_feedbacks():
 	offset = content['offset']
 
 	sql = "select * from product where creatorId = " + userId
-	sql += " and id in (select productId from product_testing where not advice = '' and earned = 0 and rejectedReason = '')"
+	sql += " and id in ("
+	sql += "select productId from product_testing where not advice = '' and ("
+	sql += "select count(*) from tester_rate where productId = product_testing.productId and testerId = product_testing.testerId and testingId = product_testing.id"
+	sql += ") = 0"
+	sql += ")"
 	sql += " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 	products = []
 
 	for data in datas:
-		feedbacks = query("select id, advice, testerId from product_testing where productId = " + str(data["id"]) + " and earned = 0 and rejectedReason = ''", True).fetchall()
+		feedbacks = query("select id, advice, testerId from product_testing where productId = " + str(data["id"]), True).fetchall()
 		otherInfo = json.loads(data["otherInfo"])
 
 		for info in feedbacks:
@@ -264,7 +232,10 @@ def get_product_feedbacks():
 
 	productId = str(content['productId'])
 
-	feedbacks = query("select id, advice, testerId from product_testing where productId = " + productId + " and earned = 0 and rejectedReason = ''", True).fetchall()
+	sql = "select id, advice, testerId from product_testing where productId = " + productId + " and ("
+	sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId and testingId = product_testing.id"
+	sql += ") = 0"
+	feedbacks = query(sql, True).fetchall()
 	product = query("select name, image, otherInfo from product where id = " + productId, True).fetchone()
 
 	otherInfo = json.loads(product["otherInfo"])

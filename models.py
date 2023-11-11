@@ -28,8 +28,9 @@ class User(db.Model):
 	bankaccountInfo = db.Column(db.String(220))
 	tokens = db.Column(db.String(75), unique=True)
 	firstTime = db.Column(db.Boolean)
+	isBanned = db.Column(db.Boolean)
 
-	def __init__(self, email, password, username, earnings, bankaccountInfo, tokens, firstTime):
+	def __init__(self, email, password, username, earnings, bankaccountInfo, tokens, firstTime, isBanned):
 		self.email = email
 		self.password = password
 		self.username = username
@@ -37,6 +38,7 @@ class User(db.Model):
 		self.bankaccountInfo = bankaccountInfo
 		self.tokens = tokens
 		self.firstTime = firstTime
+		self.isBanned = isBanned
 
 class Product(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
@@ -66,15 +68,32 @@ class ProductTesting(db.Model):
 	testerId = db.Column(db.Integer)
 	productId = db.Column(db.Integer)
 	advice = db.Column(db.String(500))
-	earned = db.Column(db.Boolean)
-	rejectedReason = db.Column(db.String(200))
+	created = db.Column(db.Integer)
 
-	def __init__(self, testerId, productId, advice, earned, rejectedReason):
+	def __init__(self, testerId, productId, advice, created):
 		self.testerId = testerId
 		self.productId = productId
 		self.advice = advice
-		self.earned = earned
-		self.rejectedReason = rejectedReason
+		self.created = created
+
+class TesterRate(db.Model):
+	id = db.Column(db.Integer, primary_key=True)
+	productId = db.Column(db.Integer)
+	testerId = db.Column(db.Integer)
+	testingId = db.Column(db.Integer)
+	type = db.Column(db.String(10))
+	reason = db.Column(db.String(100))
+	advice = db.Column(db.String(500))
+	created = db.Column(db.Integer)
+
+	def __init__(self, productId, testerId, testingId, type, reason, advice, created):
+		self.productId = productId
+		self.testerId = testerId
+		self.testingId = testingId
+		self.type = type
+		self.reason = reason
+		self.advice = advice
+		self.created = created
 
 class PendingPayout(db.Model):
 	id = db.Column(db.Integer, primary_key=True)

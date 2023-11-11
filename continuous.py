@@ -51,7 +51,7 @@ with app.app_context():
 
 							html += "Yes! You have received your earnings in your bank account.<br/><br/>Thank you for your contribution"
 							html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-							html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='https://www.getproductfeedback.com"
+							html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
 							html += "'>Try more products and earn more</a>		</div>	</div></body></html>"
 							
 							print("Rewarded $" + str(amount / 100) + " to tester")

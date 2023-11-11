@@ -29,28 +29,50 @@ def submit_feedback():
 	productId = str(content['productId'])
 	advice = content['advice']
 
-	product = query("select name, otherInfo, creatorId from product where id = " + productId, True).fetchone()
+	user = query("select isBanned from user where id = " + userId, True).fetchone()
 	testing = query("select id, advice from product_testing where testerId = " + userId + " and productId = " + productId + " and advice = ''", True).fetchone()
-	creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
-	if testing != None: # email sent properly
-		html = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
-		html += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
-		html += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
-		html += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
-		html += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+	if testing != None and user["isBanned"] == 0: # email sent properly
+		product = query("select name, otherInfo, creatorId, amountLeftover, amountSpent from product where id = " + productId, True).fetchone()
+		tester = query("select email from user where id = " + userId, True).fetchone()
+		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
-		html += "Yes! Someone just tried your product, " + product["name"] + " and gave you an advice"
-		html += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
-		html += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
-		html += "/feedback/" + productId + "'>Check it out"
-		html += "</a>		</div>	</div></body></html>"
+		otherInfo = json.loads(product["otherInfo"])
+		amount = float(product["amountLeftover"]) - (product["amountSpent"] / 5)
+		rewardAmount = product["amountSpent"] / 5
+	
+		alertCreatorHtml = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+		alertCreatorHtml += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+		alertCreatorHtml += "<div style='background-color: #efefef; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		alertCreatorHtml += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
+		alertCreatorHtml += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
 
-		send_email(creator["email"], "A customer gave you an advice on your product", html)
+		alertCreatorHtml += "Yay! Someone tried your product, " + product["name"] + " and gave you an advice"
+		alertCreatorHtml += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+		alertCreatorHtml += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
+		alertCreatorHtml += "/feedback/" + productId + "'>Check it out"
+		alertCreatorHtml += "</a>		</div>	</div></body></html>"
+
+		alertTesterHtml = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
+		alertTesterHtml += "<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	<style>.button:hover { background-color: rgba(0, 0, 0, 0.5); }</style></head><body>	"
+		alertTesterHtml += "<div style='background-color: #efefef; border-radius: 20px; display: flex; flex-direction: column; justify-content: space-around; width: 500px;'>		<div style='width: 100%;'>			"
+		alertTesterHtml += "<div style='height: 10vw; margin: 10px auto 0 auto; width: 10vw;'>				<img style='height: 100%; width: 100%;' src='" + os.getenv("CLIENT_URL") + "/favicon.ico'/>			</div><h3 style='color: grey; text-align: center;'>BetaRush</h3>		</div>		"
+		alertTesterHtml += "<div style='color: black; font-size: 20px; font-weight: bold; margin: 0 10%; text-align: center;'>			"
+		alertTesterHtml += "Congrats!! You have been rewarded $" + str(format(rewardAmount, ".2f")) + " for your advice/feedback on a product, " + product["name"]
+		alertTesterHtml += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
+		alertTesterHtml += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
+		alertTesterHtml += "/earnings'>Get your reward"
+		alertTesterHtml += "</a>		</div>	</div></body></html>"
+
+		send_email(creator["email"], "A customer gave you an advice on your product", alertCreatorHtml)
+		send_email(tester["email"], "Wow, You have been rewarded $" + str(format(rewardAmount, ".2f")), alertTesterHtml)
 
 		query("update product_testing set advice = '" + pymysql.converters.escape_string(advice) + "' where id = " + str(testing["id"]))
+		query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + productId)
 
 		return { "msg": "" }
+	elif user["isBanned"] == 1:
+		return { "banned": True }
 
 	return { "status": "nonExist" }, 400
 
@@ -61,7 +83,7 @@ def get_rejections():
 	userId = str(content['userId'])
 	offset = content['offset']
 
-	rejections = query("select id, productId, advice, rejectedReason from product_testing where testerId = " + userId + " and not rejectedReason = '' limit " + str(offset) + ", 10", True).fetchall()
+	rejections = query("select id, productId, advice from product_testing where testerId = " + userId + " limit " + str(offset) + ", 10", True).fetchall()
 
 	for rejection in rejections:
 		product = query("select name, image from product where id = " + str(rejection["productId"]), True).fetchone()
@@ -69,8 +91,5 @@ def get_rejections():
 		rejection["key"] = "rejection-" + str(rejection["id"])
 		rejection["name"] = product["name"]
 		rejection["logo"] = json.loads(product["image"])
-		rejection["reason"] = rejection["rejectedReason"]
-
-		del rejection["rejectedReason"]
 
 	return { "rejections": rejections, "offset": len(rejections) + offset }

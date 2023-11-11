@@ -7,7 +7,8 @@ import stripe, requests
 stripe.api_key = os.getenv("STRIPE_KEY")
 
 photoUrl = os.getenv("PHOTO_URL")
-launchAmount = 20.00
+launchAmount = 10.00
+regainAmount = 10.00
 appFee = 5
 pending = False
 

@@ -194,11 +194,13 @@ def reset():
 	query("delete from product")
 	query("delete from product_testing")
 	query("delete from pending_payout")
+	query("delete from tester_rate")
 
 	query("alter table user auto_increment = 1")
 	query("alter table product auto_increment = 1")
 	query("alter table product_testing auto_increment = 1")
 	query("alter table pending_payout auto_increment = 1")
+	query("alter table tester_rate auto_increment = 1")
 
 	return { "msg": "" }
 
