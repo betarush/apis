@@ -69,12 +69,14 @@ class ProductTesting(db.Model):
 	productId = db.Column(db.Integer)
 	advice = db.Column(db.String(500))
 	created = db.Column(db.Integer)
+	withdrawned = db.Column(db.Boolean)
 
-	def __init__(self, testerId, productId, advice, created):
+	def __init__(self, testerId, productId, advice, created, withdrawned):
 		self.testerId = testerId
 		self.productId = productId
 		self.advice = advice
 		self.created = created
+		self.withdrawned = withdrawned
 
 class TesterRate(db.Model):
 	id = db.Column(db.Integer, primary_key=True)

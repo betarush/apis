@@ -180,11 +180,11 @@ def try_product():
 		send_email(creator["email"], "A customer is trying our your product", html)
 
 		if testing == None:
-			query("insert into product_testing (testerId, productId, advice) values (" + userId + ", " + productId + ", '')")
+			query("insert into product_testing (testerId, productId, advice, created, withdrawned) values (" + userId + ", " + productId + ", '', " + str(time()) + ", 0)")
 		else:
 			query("update product_testing set advice = '' where id = " + str(testing["id"]))
 
-		return { "msg": "" }
+		return { "msg": "success" }
 	elif user["isBanned"] == 1:
 		return { "banned": True }
 

@@ -101,8 +101,10 @@ def get_user_info():
 
 	if user != None:
 		sql = "select count(*) as num from product_testing where not advice = '' and productId in (select id from product where creatorId = " + userId + ") and ("
-		sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId"
+		sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId and testingId = product_testing.id"
 		sql += ") = 0"
+
+		print(sql)
 		numAdvices = query(sql, True).fetchone()["num"]
 
 		username = user["email"].split("@")[0]
@@ -131,7 +133,7 @@ def get_user_info():
 			account = False
 
 		numCreatedProducts = query("select count(*) as num from product where creatorId = " + userId, True).fetchone()["num"]
-		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where testerId = " + userId + ") and not json_extract(otherInfo, '$.charge') = ''", True).fetchone()
+		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where testerId = " + userId + " and withdrawned = 0) and not json_extract(otherInfo, '$.charge') = ''", True).fetchone()
 		
 		sql = "select count(*) * 2 as num from product_testing where (select count(*) from product where id = product_testing.productId and json_extract(otherInfo, '$.charge') = '') > 0"
 		amountPending = query(sql, True).fetchone()["num"]
@@ -356,7 +358,7 @@ def get_earnings():
 	tester = query("select id, email, tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(tester["tokens"])
 
-	earnings = query("select id, productId from product_testing where testerId = " + userId + " limit 5", True).fetchall()
+	earnings = query("select id, productId, testerId from product_testing where testerId = " + userId + " limit 5", True).fetchall()
 	earnedAmount = 0.0
 	pendingEarned = 0.0
 
@@ -385,7 +387,12 @@ def get_earnings():
 
 				pendingEarned += amount
 
-			query("delete from product_testing where id = " + str(info["id"]))
+			rated = query("select count(*) as num from tester_rate where productId = " + str(info["productId"]) + " and testerId = " + str(info["testerId"]) + " and testingId = " + str(info["id"]), True).fetchone()["num"]
+
+			if rated == 0:
+				query("update product_testing set withdrawned = 1 where id = " + str(info["id"]))
+			else:
+				query("delete from product_testing where  id = " + str(info["id"]))
 
 	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId, True).fetchone()["num"]
 
@@ -502,7 +509,7 @@ def rate_customer():
 	type = content['type']
 	reason = content['reason']
 
-	productTesting = query("select id, advice from product_testing where productId = " + productId + " and testerId = " + testerId, True).fetchone()
+	productTesting = query("select id, advice, withdrawned from product_testing where productId = " + productId + " and testerId = " + testerId, True).fetchone()
 	query("insert into tester_rate (productId, testerId, testingId, type, reason, advice, created) values (" + productId + ", " + testerId + ",  " + str(productTesting["id"]) + ", '" + type + "', '" + reason + "', '" + pymysql.converters.escape_string(productTesting["advice"]) + "', " + str(time()) + ")")
 
 	if type == "warn":
@@ -539,5 +546,8 @@ def rate_customer():
 			html += "</a>		</div>	</div></body></html>"
 
 			send_email(tester["email"], "You have been banned", html)
+
+	if productTesting["withdrawned"] == 1:
+		query("delete from product_testing where id = " + str(productTesting["id"]))
 
 	return { "msg": "" }
