@@ -104,7 +104,6 @@ def get_user_info():
 		sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId and testingId = product_testing.id"
 		sql += ") = 0"
 
-		print(sql)
 		numAdvices = query(sql, True).fetchone()["num"]
 
 		username = user["email"].split("@")[0]
@@ -133,14 +132,14 @@ def get_user_info():
 			account = False
 
 		numCreatedProducts = query("select count(*) as num from product where creatorId = " + userId, True).fetchone()["num"]
-		amountEarned = query("select sum(amountSpent / 5) as earnings from product where id in (select productId from product_testing where testerId = " + userId + " and withdrawned = 0) and not json_extract(otherInfo, '$.charge') = ''", True).fetchone()
-		
-		sql = "select count(*) * 2 as num from product_testing where (select count(*) from product where id = product_testing.productId and json_extract(otherInfo, '$.charge') = '') > 0"
-		amountPending = query(sql, True).fetchone()["num"]
+		amountEarned = query("select count(*) * 2 as earnings from product_testing where productId in (select id from product where not json_extract(otherInfo, '$.charge') = '') and withdrawned = 0 and not advice = '' and testerId = " + userId, True).fetchone()
 		earnings = 0
 
 		if amountEarned["earnings"] != None:
 			earnings = round(amountEarned["earnings"], 2)
+		
+		sql = "select count(*) * 2 as num from product_testing where (select count(*) from product where id = product_testing.productId and json_extract(otherInfo, '$.charge') = '') > 0 and testerId = " + userId
+		amountPending = query(sql, True).fetchone()["num"]
 
 		return {
 			"username": username,
@@ -358,43 +357,67 @@ def get_earnings():
 	tester = query("select id, email, tokens from user where id = " + userId, True).fetchone()
 	tokens = json.loads(tester["tokens"])
 
-	earnings = query("select id, productId, testerId from product_testing where testerId = " + userId + " limit 5", True).fetchall()
+	sql = "select productId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 group by productId limit 5"
+	datas = query(sql, True).fetchall()
 	earnedAmount = 0.0
 	pendingEarned = 0.0
+	numLeftover = 0
 
-	for info in earnings:
-		product = query("select name, otherInfo, amountSpent from product where id = " + str(info["productId"]), True).fetchone()
+	for data in datas:
+		product = query("select name, otherInfo, amountSpent from product where id = " + str(data["productId"]), True).fetchone()
+		amount = product["amountSpent"] / 5
 		otherInfo = json.loads(product["otherInfo"])
 
-		if otherInfo["charge"] != "" and otherInfo["transferGroup"] != "":
-			transferGroup = otherInfo["transferGroup"]
-			amount = product["amountSpent"] / 5
+		charge = otherInfo["charge"]
+		transferGroup = otherInfo["transferGroup"]
 
-			transferAmount = int(amount * 100)
-			balance = get_balance()
-			earnedAmount += amount
+		if charge != "":
+			balance = get_balance() / 100
+			transferAmount = 0
 
-			if balance >= transferAmount and pending == False:
+			if balance > 0:
+				sql = "select id, productId, testerId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 limit 100"
+				tests = query(sql, True).fetchall()
+
+				for test in tests:
+					transferAmount += amount
+
+					rated = query("select count(*) as num from tester_rate where productId = " + str(test["productId"]) + " and testerId = " + str(userId) + " and testingId = " + str(test["id"]), True).fetchone()["num"]
+
+					if rated == 0:
+						query("update product_testing set withdrawned = 1 where id = " + str(test["id"]))
+					else:
+						query("delete from product_testing where id = " + str(test["id"]))
+
+					if transferAmount + amount > balance:
+						break
+					
+				earnedAmount = transferAmount
+				
 				stripe.Transfer.create(
-					amount=transferAmount,
+					amount=int(earnedAmount * 100),
 					currency="cad",
 					description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
 					destination=tokens["account"],
 					transfer_group=transferGroup
 				)
-			else:
-				query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
+			else: # add to pending
+				sql = "select id, productId, testerId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 limit 50"
 
-				pendingEarned += amount
+				leftovers = query(sql, True).fetchall()
 
-			rated = query("select count(*) as num from tester_rate where productId = " + str(info["productId"]) + " and testerId = " + str(info["testerId"]) + " and testingId = " + str(info["id"]), True).fetchone()["num"]
+				for leftover in leftovers:
+					query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
+					
+					rated = query("select count(*) as num from tester_rate where productId = " + str(leftover["productId"]) + " and testerId = " + str(userId) + " and testingId = " + str(leftover["id"]), True).fetchone()["num"]
+					pendingEarned += amount
 
-			if rated == 0:
-				query("update product_testing set withdrawned = 1 where id = " + str(info["id"]))
-			else:
-				query("delete from product_testing where  id = " + str(info["id"]))
-
-	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId, True).fetchone()["num"]
+					if rated == 0:
+						query("update product_testing set withdrawned = 1 where id = " + str(leftover["id"]))
+					else:
+						query("delete from product_testing where id = " + str(leftover["id"]))
+				
+	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0", True).fetchone()["num"]
 
 	return { 
 		"earnedAmount": earnedAmount,
@@ -461,8 +484,8 @@ def create_customer_payment():
 			"country": paymentMethod.data[0].card.country,
 			"currency": charge.currency
 		}
-		amount = get_stripe_fee(chargeInfo, amount)
-		payoutAmount = int((amount - launchAmount) * 100)
+		stripeFeeAmount = get_stripe_fee(chargeInfo, amount)
+		payoutAmount = int((stripeFeeAmount - launchAmount) * 100)
 		balance = get_balance()
 
 		if balance >= payoutAmount and pending == False:
@@ -506,10 +529,11 @@ def rate_customer():
 
 	productId = str(content['productId'])
 	testerId = str(content['testerId'])
+	testingId = str(content['testingId'])
 	type = content['type']
 	reason = content['reason']
 
-	productTesting = query("select id, advice, withdrawned from product_testing where productId = " + productId + " and testerId = " + testerId, True).fetchone()
+	productTesting = query("select id, advice, withdrawned from product_testing where productId = " + productId + " and testerId = " + testerId + " and id = " + testingId, True).fetchone()
 	query("insert into tester_rate (productId, testerId, testingId, type, reason, advice, created) values (" + productId + ", " + testerId + ",  " + str(productTesting["id"]) + ", '" + type + "', '" + reason + "', '" + pymysql.converters.escape_string(productTesting["advice"]) + "', " + str(time()) + ")")
 
 	if type == "warn":

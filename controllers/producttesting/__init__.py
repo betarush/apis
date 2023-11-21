@@ -26,14 +26,14 @@ def submit_feedback():
 	content = request.get_json()
 
 	userId = str(content['userId'])
-	productId = str(content['productId'])
+	testingId = str(content['testingId'])
 	advice = content['advice']
 
 	user = query("select isBanned from user where id = " + userId, True).fetchone()
-	testing = query("select id, advice from product_testing where testerId = " + userId + " and productId = " + productId + " and advice = ''", True).fetchone()
+	testing = query("select id, advice, productId from product_testing where testerId = " + userId + " and id = " + testingId + " and advice = ''", True).fetchone()
 
 	if testing != None and user["isBanned"] == 0: # email sent properly
-		product = query("select name, otherInfo, creatorId, amountLeftover, amountSpent from product where id = " + productId, True).fetchone()
+		product = query("select name, otherInfo, creatorId, amountLeftover, amountSpent from product where id = " + str(testing["productId"]), True).fetchone()
 		tester = query("select email from user where id = " + userId, True).fetchone()
 		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
@@ -50,7 +50,7 @@ def submit_feedback():
 		alertCreatorHtml += "Yay! Someone tried your product, " + product["name"] + " and gave you an advice"
 		alertCreatorHtml += "</div>		<div style='display: flex; flex-direction: row; justify-content: space-around; width: 100%;'>			"
 		alertCreatorHtml += "<a class='button' style='border-radius: 10px; border-style: solid; border-width: 5px; color: black; font-size: 15px; margin: 10px auto; padding: 5px; text-align: center; text-decoration: none; width: 100px;' href='" + os.getenv("CLIENT_URL")
-		alertCreatorHtml += "/feedback/" + productId + "'>Check it out"
+		alertCreatorHtml += "/feedback/" + str(testing["productId"]) + "'>Check it out"
 		alertCreatorHtml += "</a>		</div>	</div></body></html>"
 
 		alertTesterHtml = "<html><head>	<link href='https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap' rel='stylesheet'/>	"
@@ -68,28 +68,10 @@ def submit_feedback():
 		send_email(tester["email"], "Wow, You have been rewarded $" + str(format(rewardAmount, ".2f")), alertTesterHtml)
 
 		query("update product_testing set advice = '" + pymysql.converters.escape_string(advice) + "' where id = " + str(testing["id"]))
-		query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + productId)
+		query("update product set amountLeftover = " + str(round(amount, 2)) + " where id = " + str(testing["productId"]))
 
 		return { "msg": "" }
 	elif user["isBanned"] == 1:
 		return { "banned": True }
 
 	return { "status": "nonExist" }, 400
-
-@app.route("/get_rejections", methods=["POST"])
-def get_rejections():
-	content = request.get_json()
-
-	userId = str(content['userId'])
-	offset = content['offset']
-
-	rejections = query("select id, productId, advice from product_testing where testerId = " + userId + " limit " + str(offset) + ", 10", True).fetchall()
-
-	for rejection in rejections:
-		product = query("select name, image from product where id = " + str(rejection["productId"]), True).fetchone()
-
-		rejection["key"] = "rejection-" + str(rejection["id"])
-		rejection["name"] = product["name"]
-		rejection["logo"] = json.loads(product["image"])
-
-	return { "rejections": rejections, "offset": len(rejections) + offset }

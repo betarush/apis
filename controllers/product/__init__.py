@@ -79,7 +79,10 @@ def get_untested_products():
 	offset = content['offset']
 
 	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where testerId = " + userId + " and productId = product.id) = 0 and amountLeftover > 0 limit " + str(offset) + ", 10"
+	sql += " and "
+	sql += "(select count(*) from product_testing where testerId = " + userId + " and productId = product.id and advice = '') = 0"
+	sql += " and amountLeftover > 0"
+	sql += " limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
@@ -95,6 +98,7 @@ def get_untested_products():
 
 		data["numLeftover"] = 5 - ((data["amountSpent"] - data["amountLeftover"]) / (data["amountSpent"] / 5))
 		data["reward"] = data["amountSpent"] / 5
+		data["link"] = "https://" + data["link"]
 
 	return { "products": datas, "offset": len(datas) + offset }
 
@@ -105,19 +109,19 @@ def get_testing_products():
 	userId = str(content['userId'])
 	offset = content['offset']
 
-	sql = "select * from product where not creatorId = " + userId
-	sql += " and (select count(*) from product_testing where productId = product.id and testerId = " + userId + ") > 0 limit " + str(offset) + ", 10"
+	sql = "select * from product_testing where testerId = " + userId + " and advice = '' limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 
 	for data in datas:
-		data["key"] = "product-" + str(data["id"])
-		data["logo"] = json.loads(data["image"])
+		product = query("select * from product where id = " + str(data["productId"]), True).fetchone()
 
-		testing = query("select advice from product_testing where productId = " + str(data["id"]), True).fetchone()
+		data["key"] = "testing-" + str(data["id"])
+		data["logo"] = json.loads(product["image"])
 
-		data["gave_feedback"] = testing["advice"] != ""
-		data["reward"] = data["amountSpent"] / 5
+		data["gave_feedback"] = data["advice"] != ""
+		data["reward"] = product["amountSpent"] / 5
+		data["link"] = "https://" + product["link"]
 
 	return { "products": datas, "offset": len(datas) + offset }
 
@@ -161,9 +165,8 @@ def try_product():
 	productId = str(content['productId'])
 
 	user = query("select isBanned from user where id = " + userId, True).fetchone()
-	testing = query("select * from product_testing where testerId = " + userId + " and productId = " + productId, True).fetchone()
 
-	if testing == None and user["isBanned"] == 0: # haven't tried yet
+	if user["isBanned"] == 0: # haven't tried yet
 		product = query("select creatorId, name from product where id = " + productId, True).fetchone()
 		creator = query("select email from user where id = " + str(product["creatorId"]), True).fetchone()
 
@@ -179,10 +182,7 @@ def try_product():
 
 		send_email(creator["email"], "A customer is trying our your product", html)
 
-		if testing == None:
-			query("insert into product_testing (testerId, productId, advice, created, withdrawned) values (" + userId + ", " + productId + ", '', " + str(time()) + ", 0)")
-		else:
-			query("update product_testing set advice = '' where id = " + str(testing["id"]))
+		query("insert into product_testing (testerId, productId, advice, created, withdrawned) values (" + userId + ", " + productId + ", '', " + str(time()) + ", 0)")
 
 		return { "msg": "success" }
 	elif user["isBanned"] == 1:
@@ -202,16 +202,23 @@ def get_feedbacks():
 	sql += "select productId from product_testing where not advice = '' and ("
 	sql += "select count(*) from tester_rate where productId = product_testing.productId and testerId = product_testing.testerId and testingId = product_testing.id"
 	sql += ") = 0"
-	sql += ")"
-	sql += " limit " + str(offset) + ", 10"
+	sql += ") limit " + str(offset) + ", 10"
 
 	datas = query(sql, True).fetchall()
 	products = []
 
 	for data in datas:
-		feedbacks = query("select id, advice, testerId from product_testing where productId = " + str(data["id"]), True).fetchall()
 		otherInfo = json.loads(data["otherInfo"])
 
+		sql = "select id, advice, testerId from product_testing where productId = " + str(data["id"]) + " and not advice = ''"
+
+		if otherInfo["charge"] != "": # show full number of feedbacks if deposit hasn't been made
+			sql += "and ("
+			sql += "select count(*) from tester_rate where productId = product_testing.productId and testerId = product_testing.testerId and testingId = product_testing.id"
+			sql += ") = 0"
+
+		feedbacks = query(sql, True).fetchall()
+		
 		for info in feedbacks:
 			info["key"] = "advice-" + str(data["id"]) + "-" + str(info["id"])
 
@@ -232,7 +239,7 @@ def get_product_feedbacks():
 
 	productId = str(content['productId'])
 
-	sql = "select id, advice, testerId from product_testing where productId = " + productId + " and ("
+	sql = "select id, advice, testerId from product_testing where productId = " + productId + " and not advice = '' and ("
 	sql += "select count(*) from tester_rate where testerId = product_testing.testerId and productId = product_testing.productId and testingId = product_testing.id"
 	sql += ") = 0"
 	feedbacks = query(sql, True).fetchall()

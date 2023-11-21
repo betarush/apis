@@ -3,6 +3,7 @@ from random import randint
 from time import time
 from config import *
 import stripe, requests
+import numpy as np
 
 stripe.api_key = os.getenv("STRIPE_KEY")
 
@@ -56,8 +57,9 @@ def get_stripe_fee(chargeInfo, amount):
 	currency = chargeInfo["currency"]
 	country = chargeInfo["country"]
 
-	percent = 2.9 + (0.2 if currency != "cad" else 0) + (0.6 if country != "CA" else 0)
-	fee = amount * (round(percent / 100, 3)) + 0.3
+	percent = (2.9 + (0.2 if currency != "cad" else 0) + (0.8 if country != "CA" else 0)) / 100
+
+	fee = np.round((amount * percent + 0.3), 2)
 
 	return amount - fee
 

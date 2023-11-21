@@ -8,6 +8,7 @@ from flask_mail import Mail, Message
 from binascii import a2b_base64
 from time import time, sleep
 import os, json, pytz, datetime, requests
+import numpy as np
 
 app.config['MAIL_SERVER']='smtp.zoho.com'
 app.config['MAIL_PORT'] = 465
@@ -246,3 +247,17 @@ def send_email():
 	response = requests.request("POST", "https://api.zeptomail.com/v1.1/email", data=payload, headers=headers)
 
 	return { "msg": response.text }
+
+@app.route("/formula/<amount>")
+def formula(amount):
+	currency = "cad"
+	country = "US"
+	amount = int(amount)
+
+	percent = 2.9 + (0.2 if currency != "cad" else 0) + (0.8 if country != "CA" else 0)
+	percent /= 100
+
+	fee = np.round((amount * percent + 0.3), 2)
+	net = amount - fee
+
+	return { "fee": fee, "net": net }
