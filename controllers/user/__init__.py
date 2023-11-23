@@ -6,6 +6,7 @@ from models import *
 from functions import *
 from flask_mail import Mail, Message
 import os, requests
+import numpy as np
 
 app.config['MAIL_SERVER']='smtp.zoho.com'
 app.config['MAIL_PORT'] = 465
@@ -374,6 +375,7 @@ def get_earnings():
 		if charge != "":
 			balance = get_balance() / 100
 			transferAmount = 0
+			pendingEarned = 0
 
 			if balance > 0:
 				sql = "select id, productId, testerId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 limit 100"
@@ -394,28 +396,29 @@ def get_earnings():
 					
 				earnedAmount = transferAmount
 				
-				stripe.Transfer.create(
-					amount=int(earnedAmount * 100),
-					currency="cad",
-					description="Rewarded $" + str(round(amount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
-					destination=tokens["account"],
-					transfer_group=transferGroup
-				)
+				if balance > earnedAmount:
+					stripe.Transfer.create(
+						amount=int(earnedAmount * 100),
+						currency="cad",
+						description="Rewarded $" + str(round(earnedAmount, 2)) + " to tester: " + tester["email"] + " of product: " + product["name"],
+						destination=tokens["account"],
+						transfer_group=transferGroup
+					)
 			else: # add to pending
-				sql = "select id, productId, testerId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 limit 50"
+				sql = "select id, productId, testerId from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0 limit 100"
+				tests = query(sql, True).fetchall()
 
-				leftovers = query(sql, True).fetchall()
-
-				for leftover in leftovers:
-					query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(transferAmount) + ", '" + tester["email"] + "', " + str(time()) + ")")
-					
-					rated = query("select count(*) as num from tester_rate where productId = " + str(leftover["productId"]) + " and testerId = " + str(userId) + " and testingId = " + str(leftover["id"]), True).fetchone()["num"]
+				for test in tests:
 					pendingEarned += amount
 
+					rated = query("select count(*) as num from tester_rate where productId = " + str(test["productId"]) + " and testerId = " + str(userId) + " and testingId = " + str(test["id"]), True).fetchone()["num"]
+
 					if rated == 0:
-						query("update product_testing set withdrawned = 1 where id = " + str(leftover["id"]))
+						query("update product_testing set withdrawned = 1 where id = " + str(test["id"]))
 					else:
-						query("delete from product_testing where id = " + str(leftover["id"]))
+						query("delete from product_testing where id = " + str(test["id"]))
+
+				query("insert into pending_payout (accountId, transferGroup, amount, email, created) values ('" + tokens["account"] + "', '" + transferGroup + "', " + str(pendingEarned) + ", '" + tester["email"] + "', " + str(time()) + ")")
 				
 	numLeftover = query("select count(*) as num from product_testing where testerId = " + userId + " and not advice = '' and withdrawned = 0", True).fetchone()["num"]
 
@@ -485,12 +488,12 @@ def create_customer_payment():
 			"currency": charge.currency
 		}
 		stripeFeeAmount = get_stripe_fee(chargeInfo, amount)
-		payoutAmount = int((stripeFeeAmount - launchAmount) * 100)
-		balance = get_balance()
+		payoutAmount = np.round(stripeFeeAmount - launchAmount, 2)
+		balance = get_balance() / 100
 
-		if balance >= payoutAmount and pending == False:
+		if balance >= payoutAmount:
 			stripe.Payout.create(
-				amount=payoutAmount,
+				amount=int(payoutAmount * 100),
 				currency="cad"
 			)
 		else:
@@ -500,7 +503,7 @@ def create_customer_payment():
 		query("update product set otherInfo = '" + otherInfo + "', deposited = " + str(time()) + " where id = " + productId)
 	else:
 		charge = stripe.PaymentIntent.create(
-			amount=int(regainAmount * 100),
+			amount=int(unbanAmount * 100),
 			currency="cad",
 			customer=customerId,
 			payment_method=methodId,

@@ -9,9 +9,8 @@ stripe.api_key = os.getenv("STRIPE_KEY")
 
 photoUrl = os.getenv("PHOTO_URL")
 launchAmount = 10.00
-regainAmount = 10.00
+unbanAmount = 10.00
 appFee = 5
-pending = False
 
 def query(sql, output = False):
 	db_host = str(os.getenv("DB_HOST"))
@@ -60,6 +59,8 @@ def get_stripe_fee(chargeInfo, amount):
 	percent = (2.9 + (0.2 if currency != "cad" else 0) + (0.8 if country != "CA" else 0)) / 100
 
 	fee = np.round((amount * percent + 0.3), 2)
+
+	print(fee)
 
 	return amount - fee
 

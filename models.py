@@ -101,7 +101,7 @@ class PendingPayout(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	accountId = db.Column(db.String(25))
 	transferGroup = db.Column(db.String(25))
-	amount = db.Column(db.Integer)
+	amount = db.Column(db.Float())
 	email = db.Column(db.String(50))
 	created = db.Column(db.Integer)
 
